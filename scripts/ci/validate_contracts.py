@@ -7,7 +7,8 @@ available to this project. This check runs in CI and in T1's definition of done.
 
 What it checks:
   1. every contract file parses (JSON Schema, OpenAPI YAML);
-  2. every schema is itself a legal JSON Schema;
+  2. every schema is itself a legal JSON Schema, and every OpenAPI document is a legal
+     OpenAPI 3.1 document that bundles offline;
   3. the agent envelope carries the fields needed to route a message safely;
   4. each schema has at least one valid and one deliberately invalid example fixture,
      the valid one validates, and **the invalid one is actually rejected**.
@@ -15,7 +16,7 @@ What it checks:
 Exits 0 and says so plainly when contracts/ does not exist yet -- a missing contract
 before T1 is the expected state, not a failure.
 
-Dependencies (PyYAML, jsonschema) are required whenever there is something that needs
+Dependencies (PyYAML, jsonschema, openapi-spec-validator) are required whenever there is something that needs
 them. A missing dependency is a hard FAIL, never a silent skip: a validator that quietly
 does nothing is worse than no validator, because it reports success.
 
@@ -26,7 +27,8 @@ does nothing is worse than no validator, because it reports success.
     --contracts <dir>   check this directory instead of contracts/ (used by the tests)
 
 Set up the environment with:
-    uv venv --python 3.11 .venv && uv pip install --python .venv/bin/python pyyaml jsonschema
+    uv venv --python 3.11 .venv && \
+        uv pip install --python .venv/bin/python pyyaml jsonschema openapi-spec-validator
 """
 
 from __future__ import annotations
@@ -53,7 +55,8 @@ REQUIRED_ENVELOPE_FIELDS = {
 }
 
 SETUP_HINT = (
-    "install it with:  uv pip install --python .venv/bin/python pyyaml jsonschema\n"
+    "install it with:  uv pip install --python .venv/bin/python pyyaml jsonschema "
+    "openapi-spec-validator\n"
     "         then run: .venv/bin/python scripts/ci/validate_contracts.py\n"
     "         from an agent worktree the venv lives in the primary worktree:\n"
     "         ~/campusos/.venv/bin/python scripts/ci/validate_contracts.py"
@@ -111,7 +114,12 @@ def check_schema_shape(path: Path, data: dict) -> None:
             )
 
 
-def check_yaml(path: Path) -> None:
+def check_yaml(path: Path) -> dict | None:
+    """Parse an OpenAPI document. Semantic validation happens later, in check_openapi.
+
+    Returns the parsed document so main() can validate it once the JSON Schemas it
+    references have been loaded.
+    """
     global checked
     try:
         import yaml
@@ -120,20 +128,86 @@ def check_yaml(path: Path) -> None:
             f"{rel(path)}: cannot validate -- PyYAML is not installed, so this OpenAPI "
             f"document was NOT checked.\n         {SETUP_HINT}"
         )
-        return
+        return None
     try:
         data = yaml.safe_load(path.read_text())
     except Exception as exc:  # noqa: BLE001 - surface any parser error verbatim
         errors.append(f"{rel(path)}: invalid YAML -- {exc}")
-        return
+        return None
     checked += 1
     if not isinstance(data, dict):
         errors.append(f"{rel(path)}: OpenAPI document must be a mapping at the top level")
-        return
+        return None
     if "openapi" in path.name:
         for key in ("openapi", "info", "paths"):
             if key not in data:
                 errors.append(f"{rel(path)}: OpenAPI doc missing '{key}'")
+                return None
+        return data
+    return None
+
+
+def bundle(node, by_id: dict[str, dict], seen: tuple[str, ...] = ()):
+    """Inline every $ref that points at one of our own contract $ids.
+
+    Two things depend on this. The OpenAPI document must validate offline, and a client
+    generating types from it must be able to resolve the whole graph without reaching
+    campusos.dev -- a hostname that does not resolve today. If a ref cannot be inlined the
+    caller reports it, rather than the validator quietly fetching something from the network.
+    """
+    if isinstance(node, list):
+        return [bundle(v, by_id, seen) for v in node]
+    if not isinstance(node, dict):
+        return node
+    ref = node.get("$ref")
+    if isinstance(ref, str) and ref.startswith("https://campusos.dev/"):
+        if ref not in by_id:
+            raise KeyError(ref)
+        if ref in seen:  # a contract that references itself, directly or in a cycle
+            return {"type": "object"}
+        target = {k: v for k, v in by_id[ref].items() if k not in ("$schema", "$id")}
+        rest = {k: v for k, v in node.items() if k != "$ref"}
+        return {**bundle(target, by_id, seen + (ref,)), **bundle(rest, by_id, seen)}
+    return {k: bundle(v, by_id, seen) for k, v in node.items()}
+
+
+def check_openapi(path: Path, doc: dict, schemas: list[tuple[Path, dict]]) -> None:
+    """Validate the document against the OpenAPI 3.1 specification itself.
+
+    Parsing YAML and spotting three top-level keys is not validation: a document can be
+    legal YAML, carry every required key, and still be rejected by every code generator
+    the frontend would use. T1 claims "valid OpenAPI" as an acceptance criterion, so the
+    check has to be the real one.
+    """
+    try:
+        from openapi_spec_validator import validate as validate_openapi
+        from openapi_spec_validator.validation.exceptions import OpenAPIValidationError
+    except ImportError:
+        errors.append(
+            f"{rel(path)}: cannot validate -- openapi-spec-validator is not installed, so "
+            f"this document was NOT checked against the OpenAPI specification.\n"
+            f"         {SETUP_HINT}"
+        )
+        return
+
+    by_id = {s["$id"]: s for _, s in schemas if "$id" in s}
+    try:
+        bundled = bundle(doc, by_id)
+    except KeyError as exc:
+        errors.append(
+            f"{rel(path)}: $ref {exc} does not match the $id of any contract in this "
+            "directory, so the document cannot be bundled offline. A client generating "
+            "types from it would have to fetch that URL over the network."
+        )
+        return
+
+    try:
+        validate_openapi(bundled)
+    except OpenAPIValidationError as exc:
+        where = "/".join(str(p) for p in getattr(exc, "path", []) or []) or "(root)"
+        errors.append(f"{rel(path)}: not a valid OpenAPI 3.1 document at {where}: {exc.message}")
+    except Exception as exc:  # noqa: BLE001 - never let a validator crash the run
+        errors.append(f"{rel(path)}: OpenAPI validation failed -- {exc}")
 
 
 def build_registry(schemas: list[tuple[Path, dict]]):
@@ -269,6 +343,7 @@ def main() -> int:
         return 0
 
     schemas: list[tuple[Path, dict]] = []
+    openapi_docs: list[tuple[Path, dict]] = []
 
     for path in files:
         # Fixtures are instances, not schemas. They are checked against their schema below.
@@ -289,7 +364,9 @@ def main() -> int:
                     f"{rel(path)}: name it <thing>.schema.json so its fixtures can be found"
                 )
         elif path.suffix in (".yaml", ".yml"):
-            check_yaml(path)
+            doc = check_yaml(path)
+            if doc is not None:
+                openapi_docs.append((path, doc))
         elif path.suffix == ".md":
             continue
         else:
@@ -298,6 +375,8 @@ def main() -> int:
     registry = build_registry(schemas)
     for schema_path, schema in schemas:
         check_fixtures(schema_path, schema, registry)
+    for doc_path, doc in openapi_docs:
+        check_openapi(doc_path, doc, schemas)
 
     for w in warnings:
         print(f"WARN  {w}")
