@@ -36,7 +36,7 @@ kept **validated and submittable on short notice**.
 |---|---|---|---|---|---|
 | — | Orchestrator | T0 | claude | `~/campusos` (primary) | **`DONE`** — signed off 2026-10-24 |
 | — | Orchestrator | T0b | claude | — | **blocked on D2** (roster + owner) |
-| — | Orchestrator | T1 | claude | `~/campusos-worktrees/T1-architecture` | **`REVIEW`** — attempt 2, awaiting re-review + merge |
+| — | Orchestrator | T1 | claude | `~/campusos-worktrees/T1-architecture` | **`REVIEW`** — attempt 3, awaiting re-review + merge |
 | 1 | Backend Engineer | T2 | codex | — | waiting on T1 |
 | 2 | GPU Infra Engineer | T3 | codex | — | waiting on T1 |
 | 3 | ML Engineer | T4 | claude | — | waiting on T1 |
@@ -49,9 +49,10 @@ kept **validated and submittable on short notice**.
 
 **Human, two things:**
 
-1. **Re-review and merge T1.** Codex reviewed attempt 1 and returned `CHANGES_REQUESTED` with
-   seven findings — including a demonstrated disclosure hole in the agent envelope, since
-   closed. All seven are addressed on the branch. One repair attempt of three is used.
+1. **Re-review and merge T1.** Two review rounds, 13 findings, all addressed. **Two of three
+   repair attempts are used.** If the third review also returns `CHANGES_REQUESTED`, the loop
+   is exhausted and the next step is `docs/agents/reviews/T1/ESCALATION.md` and a human
+   decision — not a fourth repair.
 
    ```bash
    cd ~/campusos
@@ -98,12 +99,12 @@ After the merge, the Orchestrator moves T2/T3/T4 to `READY` and the first parall
 | Task | Attempts used | Verdict | Escalated |
 |---|---|---|---|
 | T0 | 0 | approved by the human 2026-10-24 | no |
-| T1 | **1 / 3** | attempt 1 `CHANGES_REQUESTED` (7 findings, all addressed); attempt 2 awaiting re-review | no |
+| T1 | **2 / 3 — one left** | attempt 1 `CHANGES_REQUESTED` (7 findings); attempt 2 `CHANGES_REQUESTED` (6 findings); all addressed, attempt 3 awaiting re-review | no |
 
 The loop is bounded at **3** repair attempts per task; the fourth attempt is refused and
 `docs/agents/reviews/<TASK>/ESCALATION.md` is written instead.
 
-## What the first review changed
+## What the two reviews changed
 
 Worth knowing before reading the contracts, because several are materially different from the
 versions reviewed:
@@ -119,6 +120,14 @@ versions reviewed:
   `ChannelSummary` verbatim and never reads participant state.
 - **`/health` is authenticated**, like every other path.
 - **T2 owns the inference adapter; T3 owns serving.** T3 cannot edit `backend/`.
+- **Transcript entries carry `summary_code`, not prose**, and their nested availability may not
+  exceed the entry's level. The transcript was a second carrier of the ladder and bypassed it.
+- **A partially-approved negotiation is now representable** — `viewer.awaiting_me` separates
+  "this negotiation is awaiting approval" from "you still have to act".
+- **Track 3 consent is a four-step flow**, per negotiation, with the Discord identity mapping
+  submitted by the student rather than the bot.
+- **The disclosure ladder has a committed sweep**, `scripts/ci/check_disclosure_matrix.py`,
+  which also fails when a schema grows a carrier it does not know about.
 
 ## Contract stability
 
