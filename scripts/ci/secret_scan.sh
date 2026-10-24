@@ -29,7 +29,7 @@ FAIL=0
 while IFS= read -r f; do
   [ -z "$f" ] && continue
   case "$f" in
-    *.env|.env|.env.*)
+    *.env|.env.*)
       case "$f" in *.example|*.sample|*.template) continue ;; esac
       echo "BLOCKED  $f  — environment files must not be committed (commit .env.example instead)"
       FAIL=1 ;;

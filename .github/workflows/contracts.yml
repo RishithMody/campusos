@@ -41,8 +41,7 @@ jobs:
       - name: Shellcheck
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
-          shellcheck -S warning scripts/agents.sh scripts/ci/*.sh .githooks/* || {
-              echo "::warning::shellcheck reported issues (non-blocking for now)"; }
+          shellcheck -S warning scripts/agents.sh scripts/ci/*.sh .githooks/*
 
       - name: Orchestration files present
         run: |
@@ -58,6 +57,9 @@ jobs:
               echo "MISSING role $r"; fail=1; fi
           done
           exit $fail
+
+      - name: Orchestration tooling regression tests
+        run: ./scripts/ci/test_agents_sh.sh
 
       - name: Hooks are executable
         run: |

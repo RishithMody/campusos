@@ -21,6 +21,16 @@ cd ~/campusos
 `doctor` checks both CLIs, your Git identity, the hooks, and every coordination file. Fix
 anything it flags before starting an agent.
 
+The orchestration tooling has its own regression tests, which also run in CI:
+
+```bash
+./scripts/ci/test_agents_sh.sh
+```
+
+They assert on exit codes, because that is the contract — a guard that fails to refuse is
+the failure mode that matters. They are non-destructive: the worktree-lifecycle tests skip
+themselves if `task/T1-architecture` already exists.
+
 ---
 
 ## 1. Phase 0 — the Orchestrator goes first

@@ -39,10 +39,10 @@ CODEX_SANDBOX="${CAMPUSOS_CODEX_SANDBOX:-workspace-write}"
 # ----------------------------------------------------------------------- output
 
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
-  B=$'\033[1m'; DIM=$'\033[2m'; RED=$'\033[31m'; GRN=$'\033[32m'
-  YEL=$'\033[33m'; CYN=$'\033[36m'; N=$'\033[0m'
+  B=$'\033[1m'; DIM=$'\033[2m'; RED=$'\033[31m'
+  GRN=$'\033[32m'; YEL=$'\033[33m'; N=$'\033[0m'
 else
-  B=""; DIM=""; RED=""; GRN=""; YEL=""; CYN=""; N=""
+  B=""; DIM=""; RED=""; GRN=""; YEL=""; N=""
 fi
 
 info() { printf '%s\n' "$*"; }
@@ -90,6 +90,11 @@ is_impl_task() {
 }
 
 field() { echo "$1" | awk -v i="$2" '{print $i}'; }
+
+# File modification time as a unix timestamp. BSD (macOS) and GNU stat disagree on flags.
+file_mtime() {
+  stat -f '%m' "$1" 2>/dev/null || stat -c '%Y' "$1" 2>/dev/null || echo 0
+}
 
 # Count existing files from a glob. An unmatched glob stays literal and fails -f, so this
 # returns 0 without a pipeline -- `ls <glob> | wc -l` fails under `set -o pipefail`.
@@ -278,10 +283,17 @@ cmd_status() {
   [ "$any" -eq 0 ] && info "$DIM  (no task worktrees yet)$N" || true
 
   hdr "Recent handoffs"
-  local recent
-  recent="$(ls -t "$REPO_ROOT/docs/agents/handoffs"/*.md 2>/dev/null | grep -v TEMPLATE | head -5 || true)"
+  local recent f base
+  recent="$(
+    for f in "$REPO_ROOT/docs/agents/handoffs"/*.md; do
+      [ -f "$f" ] || continue
+      base="$(basename "$f")"
+      [ "$base" = "TEMPLATE.md" ] && continue || true
+      printf '%s\t%s\n' "$(file_mtime "$f")" "$(basename "$f")"
+    done | sort -rn | head -5 | cut -f2-
+  )"
   if [ -n "$recent" ]; then
-    printf '%s\n' "$recent" | while read -r f; do info "  $(basename "$f")"; done
+    printf '%s\n' "$recent" | while IFS= read -r f; do info "  $f"; done
   else
     info "$DIM  (none)$N"
   fi
