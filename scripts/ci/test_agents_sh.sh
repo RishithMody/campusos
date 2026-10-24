@@ -105,8 +105,16 @@ t "create: T11 is a known task"   1 $A create orchestrator T11
 t "T9 is not reported unknown"    1 bash -c "$A create frontend T9 2>&1 | grep -q 'unknown task'"
 t "T10 is not reported unknown"   1 bash -c "$A create orchestrator T10 2>&1 | grep -q 'unknown task'"
 t "T11 is not reported unknown"   1 bash -c "$A create orchestrator T11 2>&1 | grep -q 'unknown task'"
-t "create: T0c is a known task"   1 bash -c "$A create orchestrator T0c 2>&1 | grep -q \"unknown task\""
-t "T0c is not reported unknown"   1 bash -c "$A create orchestrator T0c 2>&1 | grep -q \"unknown task\""
+t "T0c is a known task"           0 bash -c "$A create orchestrator T0c 2>&1 | grep -qv 'unknown task'"
+t "T0c refused while BLOCKED"     1 bash -c "$A create orchestrator T0c"
+
+# A status may carry its reason -- `BLOCKED` (D2). Exact-equality matching let those
+# through, so the annotation explaining WHY a task was blocked disabled the guard
+# enforcing it. Both T0b and T0c were written that way.
+t "annotated BLOCKED still blocks" 0 \
+  bash -c "$A create orchestrator T0c 2>&1 | grep -q 'is BLOCKED'"
+t "annotated BLOCKED: no worktree" 0 \
+  bash -c "! test -d \"$HOME/campusos-worktrees/T0c-track1-submission\""
 t "T99 is still reported unknown" 0 bash -c "$A create ml T99 2>&1 | grep -q 'unknown task'"
 
 echo "Review waiver is an honest override"

@@ -160,7 +160,7 @@ cmd_create() {
   status="$(task_status "$task")"
 
   # Dependency gate: the graph says whether this task may start.
-  if [ "$status" = "BLOCKED" ] && [ -z "${CAMPUSOS_ALLOW_BLOCKED:-}" ]; then
+  if case "$status" in BLOCKED*) true ;; *) false ;; esac && [ -z "${CAMPUSOS_ALLOW_BLOCKED:-}" ]; then
     die "$task is BLOCKED in docs/task-graph.md — its dependencies are not satisfied.
 Do not start a task before its dependencies are DONE. The Orchestrator moves it to
 READY once they are. To override deliberately: CAMPUSOS_ALLOW_BLOCKED=1 $0 create $role $task"
@@ -464,7 +464,7 @@ Create it first:  $0 create $role $task"
     fi
   fi
 
-  if [ "$status" = "BLOCKED" ] && [ -z "${CAMPUSOS_ALLOW_BLOCKED:-}" ]; then
+  if case "$status" in BLOCKED*) true ;; *) false ;; esac && [ -z "${CAMPUSOS_ALLOW_BLOCKED:-}" ]; then
     die "$task is BLOCKED — dependencies not satisfied. See docs/task-graph.md"
   fi
   [ -f "$REPO_ROOT/docs/agents/assignments/$task.md" ] \
