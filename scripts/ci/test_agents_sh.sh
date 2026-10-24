@@ -186,6 +186,43 @@ else
 fi
 rm -rf "$(dirname "$cdir")"
 
+echo "Disclosure matrix guards every carrier"
+# The ladder was fixed on the agent envelope and reintroduced on the transcript in the
+# same commit. These assert the guard itself works, on throwaway copies.
+mdir="$(mktemp -d)/contracts"; mkdir -p "$mdir/examples/thing"
+cat > "$mdir/thing.schema.json" <<'JSON'
+{"$schema":"https://json-schema.org/draft/2020-12/schema","title":"Thing","type":"object",
+ "properties":{"id":{"type":"string"},"n":{"type":"integer","minimum":0}},
+ "required":["id","n"],"additionalProperties":false}
+JSON
+printf '{"id":"a","n":1}\n'  > "$mdir/examples/thing/valid-basic.json"
+printf '{"id":"a","n":-5}\n' > "$mdir/examples/thing/invalid-negative.json"
+t "matrix: an isolated negative passes"  0 $PYBIN scripts/ci/check_disclosure_matrix.py --contracts "$mdir"
+
+# A negative failing for two reasons stays red even if its named constraint is deleted,
+# so it quietly stops testing anything.
+printf '{"n":-5}\n' > "$mdir/examples/thing/invalid-negative.json"
+t "matrix: non-isolated negative caught"  1 $PYBIN scripts/ci/check_disclosure_matrix.py --contracts "$mdir"
+printf '{"id":"a","n":-5}\n' > "$mdir/examples/thing/invalid-negative.json"
+
+# A negative that validates is the worst case: it asserts nothing at all.
+printf '{"id":"a","n":7}\n' > "$mdir/examples/thing/invalid-negative.json"
+t "matrix: unrejected negative caught"    1 $PYBIN scripts/ci/check_disclosure_matrix.py --contracts "$mdir"
+printf '{"id":"a","n":-5}\n' > "$mdir/examples/thing/invalid-negative.json"
+
+# A new carrier of the availability envelope that nothing sweeps.
+cat > "$mdir/availability.schema.json" <<'JSON'
+{"$schema":"https://json-schema.org/draft/2020-12/schema",
+ "$id":"https://campusos.dev/contracts/v1/availability.schema.json",
+ "title":"Availability","type":"object","properties":{"x":{"type":"string"}}}
+JSON
+cat > "$mdir/carrier.schema.json" <<'JSON'
+{"$schema":"https://json-schema.org/draft/2020-12/schema","title":"Carrier","type":"object",
+ "properties":{"a":{"$ref":"https://campusos.dev/contracts/v1/availability.schema.json"}}}
+JSON
+t "matrix: unswept carrier caught"        1 $PYBIN scripts/ci/check_disclosure_matrix.py --contracts "$mdir"
+rm -rf "$(dirname "$mdir")"
+
 echo "Secret scan actually catches secrets"
 tmp="$(mktemp -d)"
 # The fake credentials are assembled at runtime from harmless halves, so this test file
