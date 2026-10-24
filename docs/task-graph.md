@@ -178,7 +178,8 @@ pivot away from solo study planning, which collides with Cubbie's built-in `stud
 |---|---|
 | **Agent** | Orchestrator (Claude Code) |
 | **Depends on** | — |
-| **Status** | `REVIEW` — awaiting Codex review and the human's merge |
+| **Status** | `REVIEW` — attempt 2, awaiting re-review and the human's merge |
+| **Repair attempts** | 1 / 3 used |
 | **Branch / worktree** | `task/T1-architecture` → `~/campusos-worktrees/T1-architecture` |
 | **Owns** | `docs/architecture.md`, `contracts/`, `docs/adr/` |
 | **Handoff** | `docs/agents/handoffs/T1-1.md` (on the branch) |
@@ -210,7 +211,11 @@ payload. One schema, three surfaces — that is what makes this one product rath
 - [ ] Every schema is valid JSON Schema / OpenAPI and parses (`./scripts/ci/validate_contracts.py`)
 - [ ] Disclosure levels are enumerated and defined (what may be revealed at each level)
 - [ ] File ownership for T2–T5 and T9 is declared and **disjoint**
-- [ ] Assignment files for T2–T5 and T9 written and those tasks moved to `READY`
+- [ ] Assignment files for T2–T5 and T9 written **and** those tasks moved to `READY`.
+      Two halves with different gates: the files are written and reviewed as part of T1, but the
+      state change happens **after the human merges**, because `contracts/` exists only on the
+      branch until then and a `READY` task is one an agent may `create` against `main`. T1 can be
+      approved with this box unticked; the Orchestrator ticks it at the merge.
 
 ### Required tests
 `./scripts/ci/validate_contracts.py` passes. Each schema has at least one valid and one
@@ -219,11 +224,22 @@ deliberately invalid example fixture, and the invalid one is correctly rejected.
 **Constraint from T0:** no MCP. Cubbie's sandbox does not support MCP servers, remote or local.
 The Skill↔platform boundary is plain HTTPS on port 443 to a publicly reachable host.
 
-**Delivered 2026-10-24** on `task/T1-architecture`: five contracts, 11 fixtures (4 deliberate
-over-disclosure attempts, all rejected), `docs/architecture.md`, and filled assignments for
-T2–T5 and T9. `validate_contracts.py --strict` green. **T2/T3/T4 stay `BLOCKED` until the human
-merges** — `contracts/` exists only on the branch, so promoting them now would point three
-agents at a `main` with no contracts.
+**Delivered 2026-10-24** on `task/T1-architecture`: five contracts, 20 fixtures (11 deliberate
+over-disclosure and malformed-state attempts, all rejected), `docs/architecture.md`, and filled
+assignments for T2–T5 and T9. `validate_contracts.py --strict` green; tooling suite 35 passed.
+
+**Review attempt 1 (Codex): `CHANGES_REQUESTED`, seven findings — all addressed in attempt 2.**
+The one that mattered: the agent envelope would carry a `full` availability payload labelled
+`therapy` inside a `free_busy` message, because the ladder was enforced within the availability
+envelope and nothing bound it to the envelope carrying it. Now checked as one chain across the
+granted ceiling, the message level and the nested payload; all 64 combinations verified. The
+others closed gaps that would have blocked independent clients — approvals were undiscoverable
+before deciding, negotiations needed pseudonyms that only existed after creation, and the Track 3
+bot was told both to filter for the channel and never to filter. See
+`docs/agents/reviews/T1/attempt-1.md` and `docs/agents/handoffs/T1-2.md`.
+
+**T2/T3/T4 stay `BLOCKED` until the human merges** — `contracts/` exists only on the branch, so
+promoting them now would point three agents at a `main` with no contracts.
 
 ---
 
