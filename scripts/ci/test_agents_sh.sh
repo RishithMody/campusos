@@ -78,6 +78,23 @@ t "T10 is not reported unknown"   1 bash -c "$A create orchestrator T10 2>&1 | g
 t "T11 is not reported unknown"   1 bash -c "$A create orchestrator T11 2>&1 | grep -q 'unknown task'"
 t "T99 is still reported unknown" 0 bash -c "$A create ml T99 2>&1 | grep -q 'unknown task'"
 
+echo "Review waiver is an honest override"
+# An owner may skip the review; they may not record it as a PASS. These assert the
+# guards, and that the artefact says what it is.
+t "waive: task is required"        1 bash -c "$A waive"
+t "waive: unknown task refused"    1 bash -c "$A waive T99 --owner o --reason r"
+t "waive: owner is required"       1 bash -c "$A waive T1 --reason r"
+t "waive: reason is required"      1 bash -c "$A waive T1 --owner o"
+t "waive: unknown argument"        1 bash -c "$A waive T1 --owner o --reason r --bogus x"
+t "waive: no worktree is refused"  1 bash -c "$A waive T7 --owner o --reason r"
+# And the help must point at it rather than at a way to fake one.
+# Static checks on the template, because running a successful waive would write a real
+# WAIVER.md into the repo -- a test must not leave a governance artefact behind.
+t "waive: template says it is not a PASS" 0 bash -c "grep -q 'This is not a PASS' scripts/agents.sh"
+t "waive: template records REVIEW_WAIVED" 0 bash -c "grep -q 'REVIEW_WAIVED' scripts/agents.sh"
+t "waive: template claims no verdict"     1 bash -c "grep -Eq 'Verdict.*(PASS|APPROVED)' scripts/agents.sh"
+t "waive: documented in help"      0 bash -c "$A help 2>&1 | grep -q 'waive <TASK>'"
+
 echo "CI helper scripts"
 t "validate_contracts runs"       0 $PYBIN scripts/ci/validate_contracts.py
 if [ -d contracts ] && [ -n "$(ls -A contracts 2>/dev/null)" ]; then
