@@ -79,7 +79,7 @@ the Track 2 agent-to-agent message, and the Track 3 group-chat payload. The back
 |---|---|---|---|---|---|---|
 | T0 | Verify hackathon requirements | all | Orchestrator | Claude Code | — | `DONE` |
 | T0b | **Track 1 Cubbie Skill + submission** | 1 | Orchestrator | Claude Code | T0 + **D2** | `BLOCKED` (D2) |
-| T1 | Architecture & shared contracts | all | Orchestrator | Claude Code | — | `READY` |
+| T1 | Architecture & shared contracts | all | Orchestrator | Claude Code | — | `REVIEW` |
 | T2 | Backend implementation | 1·2·3 | Backend Engineer | Codex | T1 | `BLOCKED` |
 | T3 | GPU inference setup (vLLM) | 2·3 | GPU Infra Engineer | Codex | T1 | `BLOCKED` |
 | T4 | ML evaluation baseline | 2 | ML Engineer | Claude Code | T1 | `BLOCKED` |
@@ -178,9 +178,10 @@ pivot away from solo study planning, which collides with Cubbie's built-in `stud
 |---|---|
 | **Agent** | Orchestrator (Claude Code) |
 | **Depends on** | — |
-| **Status** | `READY` |
+| **Status** | `REVIEW` — awaiting Codex review and the human's merge |
 | **Branch / worktree** | `task/T1-architecture` → `~/campusos-worktrees/T1-architecture` |
 | **Owns** | `docs/architecture.md`, `contracts/`, `docs/adr/` |
+| **Handoff** | `docs/agents/handoffs/T1-1.md` (on the branch) |
 
 The highest-leverage engineering task. Four agents build against these contracts in parallel;
 every ambiguity here becomes a merge conflict or an integration failure in T7.
@@ -217,6 +218,12 @@ deliberately invalid example fixture, and the invalid one is correctly rejected.
 
 **Constraint from T0:** no MCP. Cubbie's sandbox does not support MCP servers, remote or local.
 The Skill↔platform boundary is plain HTTPS on port 443 to a publicly reachable host.
+
+**Delivered 2026-10-24** on `task/T1-architecture`: five contracts, 11 fixtures (4 deliberate
+over-disclosure attempts, all rejected), `docs/architecture.md`, and filled assignments for
+T2–T5 and T9. `validate_contracts.py --strict` green. **T2/T3/T4 stay `BLOCKED` until the human
+merges** — `contracts/` exists only on the branch, so promoting them now would point three
+agents at a `main` with no contracts.
 
 ---
 

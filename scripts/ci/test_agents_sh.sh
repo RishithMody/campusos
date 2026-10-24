@@ -132,6 +132,51 @@ t "unresolvable \$ref is an error"  1 $PYBIN scripts/ci/validate_contracts.py --
 t "unresolvable \$ref: no traceback" 1 bash -c "$PYBIN scripts/ci/validate_contracts.py --contracts '$cdir' 2>&1 | grep -q Traceback"
 rm -rf "$cdir/examples/refs" "$cdir/refs.schema.json"
 
+# An OpenAPI document must be checked against the OpenAPI spec, not just parsed as YAML.
+# "It is valid YAML with three keys" is not what the T1 acceptance criterion claims.
+mkdir -p "$cdir/examples/thing"
+cat > "$cdir/svc.openapi.yaml" <<'YAML'
+openapi: 3.1.0
+info: { title: Svc, version: "1.0.0" }
+paths:
+  /ping:
+    get:
+      responses:
+        "200": { description: ok }
+YAML
+t "openapi: a valid document passes"  0 $PYBIN scripts/ci/validate_contracts.py --contracts "$cdir"
+
+# Valid YAML, every top-level key present, still not a legal OpenAPI document.
+cat > "$cdir/svc.openapi.yaml" <<'YAML'
+openapi: 3.1.0
+info: { title: Svc }
+paths:
+  /ping:
+    get:
+      responses:
+        "200": { description: ok }
+YAML
+t "openapi: invalid doc is rejected"  1 $PYBIN scripts/ci/validate_contracts.py --contracts "$cdir"
+
+# A $ref into our own contract namespace must resolve from this directory. If it does not,
+# a client generating types would silently reach for the network.
+cat > "$cdir/svc.openapi.yaml" <<'YAML'
+openapi: 3.1.0
+info: { title: Svc, version: "1.0.0" }
+paths:
+  /ping:
+    get:
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "https://campusos.dev/contracts/v1/nope.schema.json" }
+YAML
+t "openapi: dangling \$ref is an error" 1 $PYBIN scripts/ci/validate_contracts.py --contracts "$cdir"
+t "openapi: dangling \$ref: no traceback" 1 bash -c "$PYBIN scripts/ci/validate_contracts.py --contracts '$cdir' 2>&1 | grep -q Traceback"
+rm -f "$cdir/svc.openapi.yaml"
+
 # Missing dependencies must be an explicit failure, never a silent skip. A bare system
 # python has neither jsonschema nor PyYAML, so this must refuse.
 if python3 -I -c "import jsonschema" 2>/dev/null; then
