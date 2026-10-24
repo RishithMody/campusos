@@ -1,0 +1,102 @@
+name: Integration (mocks)
+
+# End-to-end and integration tests, run entirely against MOCKS.
+#
+# This workflow must never need a GPU, an H200, or cluster credentials. Tests that
+# require real inference are marked @pytest.mark.gpu and excluded here; they are run
+# manually under the approval rules in docs/infra-policy.md.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: campusos_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 10s
+          --health-timeout 5s --health-retries 5
+
+    env:
+      CAMPUSOS_INFERENCE_MODE: mock
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/campusos_test
+      REDIS_URL: redis://localhost:6379/0
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect integration tests
+        id: detect
+        run: |
+          if [ -d tests/integration ] || [ -d tests/e2e ]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No integration tests yet (T7 has not landed). Nothing to run."
+          fi
+
+      - uses: actions/setup-python@v5
+        if: steps.detect.outputs.found == 'true'
+        with:
+          python-version: '3.11'
+
+      - name: Install
+        if: steps.detect.outputs.found == 'true'
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest
+          for req in backend/requirements.txt requirements-dev.txt; do
+            if [ -f "$req" ]; then pip install -r "$req"; fi
+          done
+
+      - name: Migrations
+        if: steps.detect.outputs.found == 'true'
+        run: |
+          if [ -f backend/alembic.ini ]; then
+            cd backend && alembic upgrade head
+          else
+            echo "::notice::no alembic config yet"
+          fi
+
+      - name: Integration tests (mocks only, no GPU)
+        if: steps.detect.outputs.found == 'true'
+        run: |
+          ran=0
+          if [ -d tests/integration ]; then
+            pytest tests/integration -v -m 'not gpu'
+            ran=1
+          fi
+          if [ -d tests/e2e ]; then
+            pytest tests/e2e -v -m 'not gpu'
+            ran=1
+          fi
+          if [ "$ran" = "0" ]; then echo "::notice::no integration or e2e tests present"; fi
+
+      - name: Privacy and authorization suite
+        if: steps.detect.outputs.found == 'true'
+        run: |
+          # The highest-value tests in this project: they defend the product's core promise.
+          if pytest --collect-only -q -m privacy >/dev/null 2>&1; then
+            pytest -v -m 'privacy and not gpu'
+          else
+            echo "::notice::no tests marked 'privacy' yet — T2 and QA must add them"
+          fi

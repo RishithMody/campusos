@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+#
+# pre-merge-commit — agents must never merge. Merging is the human's control point.
+#
+set -uo pipefail
+RED=$'\033[31m'; N=$'\033[0m'
+
+GITDIR="$(git rev-parse --path-format=absolute --git-dir)"
+COMMONDIR="$(git rev-parse --path-format=absolute --git-common-dir)"
+
+if [ "$GITDIR" != "$COMMONDIR" ]; then
+  printf '%s✗ pre-merge-commit blocked this merge%s\n\n' "$RED" "$N" >&2
+  cat >&2 <<'MSG'
+Merges are not performed from agent worktrees.
+
+Integration and merge approval are human decisions — that is the operator's main
+control over a multi-agent system. Finish your task, write a handoff, and set the
+task to REVIEW instead:
+
+  ./scripts/agents.sh handoff <TASK_ID>
+
+MSG
+  exit 1
+fi
+exit 0

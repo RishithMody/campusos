@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+#
+# pre-push — agents never push the base branch.
+#
+set -uo pipefail
+RED=$'\033[31m'; N=$'\033[0m'
+
+BASE="${CAMPUSOS_BASE_BRANCH:-main}"
+GITDIR="$(git rev-parse --path-format=absolute --git-dir)"
+COMMONDIR="$(git rev-parse --path-format=absolute --git-common-dir)"
+IN_AGENT_WORKTREE=0
+[ "$GITDIR" != "$COMMONDIR" ] && IN_AGENT_WORKTREE=1
+
+# stdin: <local ref> <local sha> <remote ref> <remote sha>
+while read -r _lref _lsha rref _rsha; do
+  [ -z "${rref:-}" ] && continue
+  case "$rref" in
+    refs/heads/"$BASE"|refs/heads/master)
+      if [ "$IN_AGENT_WORKTREE" = "1" ]; then
+        printf '%s✗ pre-push blocked: agents do not push %s%s\n\n' "$RED" "$BASE" "$N" >&2
+        echo "Push your task branch instead, and let the human merge." >&2
+        exit 1
+      fi ;;
+  esac
+done
+exit 0

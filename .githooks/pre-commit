@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+#
+# pre-commit — CampusOS guard rails.
+#
+# Enforced here rather than by convention alone, because Claude Code and Codex share no
+# memory: a rule that lives only in a prompt is a rule that eventually gets forgotten.
+#
+set -uo pipefail
+
+RED=$'\033[31m'; YEL=$'\033[33m'; N=$'\033[0m'
+block() { printf '%s✗ pre-commit blocked this commit%s\n\n%s\n\n' "$RED" "$N" "$1" >&2; exit 1; }
+
+ROOT="$(git rev-parse --show-toplevel)"
+BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo HEAD)"
+
+# A linked worktree means "an agent is working here". The primary worktree is the human's
+# and the Orchestrator's.
+GITDIR="$(git rev-parse --path-format=absolute --git-dir)"
+COMMONDIR="$(git rev-parse --path-format=absolute --git-common-dir)"
+IN_AGENT_WORKTREE=0
+[ "$GITDIR" != "$COMMONDIR" ] && IN_AGENT_WORKTREE=1
+
+STAGED="$(git diff --cached --name-only --diff-filter=ACMR)"
+[ -z "$STAGED" ] && exit 0
+
+# ---- 1. agents never commit directly to the base branch ----------------------
+if [ "$IN_AGENT_WORKTREE" = "1" ]; then
+  case "$BRANCH" in
+    main|master)
+      block "You are committing to '$BRANCH' from an agent worktree.
+Agents work on task branches only. Merging into $BRANCH is a human decision.
+
+  git switch -c task/<TASK_ID>-<slug>" ;;
+  esac
+fi
+
+# ---- 2. protected shared files are Orchestrator-only -------------------------
+# Agents coordinate through handoffs and reviews; they must not rewrite the rules,
+# the task graph, or the orchestration tooling out from under each other.
+if [ "$IN_AGENT_WORKTREE" = "1" ]; then
+  VIOLATIONS=""
+  while IFS= read -r f; do
+    [ -z "$f" ] && continue
+    case "$f" in
+      CLAUDE.md|AGENTS.md|docs/task-graph.md|docs/agents/status.md) VIOLATIONS="$VIOLATIONS  $f"$'\n' ;;
+      docs/agents/roles/*|.github/*|.githooks/*)                    VIOLATIONS="$VIOLATIONS  $f"$'\n' ;;
+      scripts/agents.sh|scripts/lib/*|scripts/ci/*)                 VIOLATIONS="$VIOLATIONS  $f"$'\n' ;;
+    esac
+  done <<< "$STAGED"
+
+  if [ -n "$VIOLATIONS" ]; then
+    block "These files are protected shared state, owned by the Orchestrator:
+
+$VIOLATIONS
+Unstage them and put your request in your handoff file instead:
+
+  git restore --staged <file>
+  ./scripts/agents.sh handoff <TASK_ID>
+
+You *are* expected to write to docs/agents/handoffs/ and docs/agents/reviews/."
+  fi
+fi
+
+# ---- 3. never commit a secret ------------------------------------------------
+if [ -x "$ROOT/scripts/ci/secret_scan.sh" ]; then
+  "$ROOT/scripts/ci/secret_scan.sh" --staged || exit 1
+else
+  printf '%s! scripts/ci/secret_scan.sh missing — secret scan skipped%s\n' "$YEL" "$N" >&2
+fi
+
+exit 0

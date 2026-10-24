@@ -1,0 +1,70 @@
+name: Contracts & orchestration
+
+# Validates the shared agent protocol / API contracts, and sanity-checks the
+# orchestration tooling itself. These contracts are what lets three memory-less
+# agents build compatible code in parallel, so they are worth a gate of their own.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install PyYAML (for OpenAPI validation)
+        run: pip install pyyaml
+
+      - name: Validate agent protocol and API contracts
+        run: ./scripts/ci/validate_contracts.py
+
+      - name: Shell syntax check
+        run: |
+          fail=0
+          for f in scripts/agents.sh scripts/ci/*.sh .githooks/*; do
+            [ -f "$f" ] || continue
+            if bash -n "$f"; then echo "ok   $f"; else echo "FAIL $f"; fail=1; fi
+          done
+          exit $fail
+
+      - name: Shellcheck
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          shellcheck -S warning scripts/agents.sh scripts/ci/*.sh .githooks/pre-commit \
+            .githooks/pre-merge-commit .githooks/pre-push || {
+              echo "::warning::shellcheck reported issues (non-blocking for now)"; }
+
+      - name: Orchestration files present
+        run: |
+          fail=0
+          for f in CLAUDE.md AGENTS.md docs/task-graph.md docs/infra-policy.md \
+                   docs/agents/status.md docs/reviews/TEMPLATE.md \
+                   docs/agents/handoffs/TEMPLATE.md docs/agents/assignments/TEMPLATE.md; do
+            if [ -f "$f" ]; then echo "ok   $f"; else echo "MISSING $f"; fail=1; fi
+          done
+          for r in orchestrator backend-engineer ml-engineer gpu-infra-engineer \
+                   frontend-engineer qa-security-reviewer; do
+            if [ -f "docs/agents/roles/$r.md" ]; then echo "ok   role $r"; else
+              echo "MISSING role $r"; fail=1; fi
+          done
+          exit $fail
+
+      - name: Hooks are executable
+        run: |
+          fail=0
+          for h in pre-commit pre-merge-commit pre-push; do
+            if [ -x ".githooks/$h" ]; then echo "ok   $h"; else
+              echo "NOT EXECUTABLE .githooks/$h"; fail=1; fi
+          done
+          exit $fail

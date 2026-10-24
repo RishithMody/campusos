@@ -1,0 +1,65 @@
+# Secrets and credentials — never commit these
+.env
+.env.*
+!.env.example
+!.env.sample
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+credentials.json
+*service-account*.json
+.netrc
+
+# Model weights and checkpoints — these live on the cluster or in object storage
+*.ckpt
+*.safetensors
+*.pt
+*.pth
+*.gguf
+*.bin
+ml/checkpoints/
+ml/runs/**/checkpoints/
+
+# Large datasets — commit the generator and the seed, not the output
+ml/data/generated/
+*.jsonl.gz
+*.parquet
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+.coverage
+htmlcov/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+.eslintcache
+npm-debug.log*
+
+# Logs fetched back from the cluster (keep metrics, not raw logs)
+infra/logs/
+*.log
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Agent worktrees live OUTSIDE the repo (../campusos-worktrees), but just in case
+worktrees/

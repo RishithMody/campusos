@@ -1,0 +1,93 @@
+name: Python
+
+# Lint, type-check, and unit-test the Python side (backend, ml, infra helpers).
+#
+# Runs on standard GitHub-hosted runners with NO GPU and NO cluster credentials.
+# Anything that needs an H200 is not a CI test: mark it @pytest.mark.gpu and it is
+# excluded below. See docs/infra-policy.md section 7.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Detect Python sources
+        id: detect
+        run: |
+          found=false
+          for d in backend ml infra scripts tests; do
+            if [ -d "$d" ] && find "$d" -name '*.py' -print -quit | grep -q .; then
+              found=true
+            fi
+          done
+          echo "found=$found" >> "$GITHUB_OUTPUT"
+          if [ "$found" = "false" ]; then
+            echo "::notice::No Python sources yet (T2/T4 have not landed). Nothing to check."
+          fi
+
+      - name: Install tooling
+        if: steps.detect.outputs.found == 'true'
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff mypy pytest
+          # Project deps, if the owning agent has declared them.
+          for req in backend/requirements.txt ml/requirements.txt requirements-dev.txt; do
+            if [ -f "$req" ]; then pip install -r "$req"; fi
+          done
+          [ -f pyproject.toml ] && pip install -e . || true
+
+      - name: Lint (ruff)
+        if: steps.detect.outputs.found == 'true'
+        run: ruff check .
+
+      - name: Format check (ruff)
+        if: steps.detect.outputs.found == 'true'
+        run: ruff format --check .
+
+      - name: Type check (mypy)
+        if: steps.detect.outputs.found == 'true'
+        run: |
+          targets=""
+          for d in backend ml; do [ -d "$d" ] && targets="$targets $d"; done
+          if [ -n "$targets" ]; then mypy $targets; else echo "no typed packages yet"; fi
+
+      - name: Backend unit tests
+        if: steps.detect.outputs.found == 'true'
+        run: |
+          if [ -d tests/backend ]; then
+            pytest tests/backend -v -m 'not gpu'
+          else
+            echo "::notice::tests/backend does not exist yet (T2)."
+          fi
+
+      - name: ML tests
+        if: steps.detect.outputs.found == 'true'
+        run: |
+          if [ -d tests/ml ]; then
+            pytest tests/ml -v -m 'not gpu'
+          else
+            echo "::notice::tests/ml does not exist yet (T4)."
+          fi
+
+      - name: Infra config tests
+        if: steps.detect.outputs.found == 'true'
+        run: |
+          if [ -d tests/infra ]; then
+            pytest tests/infra -v -m 'not gpu'
+          else
+            echo "::notice::tests/infra does not exist yet (T3)."
+          fi
