@@ -177,12 +177,18 @@ t "openapi: dangling \$ref is an error" 1 $PYBIN scripts/ci/validate_contracts.p
 t "openapi: dangling \$ref: no traceback" 1 bash -c "$PYBIN scripts/ci/validate_contracts.py --contracts '$cdir' 2>&1 | grep -q Traceback"
 rm -f "$cdir/svc.openapi.yaml"
 
-# Missing dependencies must be an explicit failure, never a silent skip. A bare system
-# python has neither jsonschema nor PyYAML, so this must refuse.
+# Missing dependencies must be an explicit failure, never a silent skip. CAMPUSOS_REEXEC=1
+# suppresses the convenience re-exec so this exercises the real no-dependency path --
+# otherwise the thing that makes the command pleasant to run would hide the thing that
+# makes it trustworthy.
 if python3 -I -c "import jsonschema" 2>/dev/null; then
   skip "deps missing is a hard failure" "system python3 already has jsonschema"
 else
-  t "deps missing is a hard failure" 1 python3 -I scripts/ci/validate_contracts.py --contracts "$cdir"
+  t "deps missing is a hard failure" 1 \
+    env CAMPUSOS_REEXEC=1 python3 -I scripts/ci/validate_contracts.py --contracts "$cdir"
+  # ...and with the guard off, the same interpreter must find the venv and succeed.
+  t "deps missing: re-execs under the venv" 0 \
+    python3 scripts/ci/validate_contracts.py --contracts "$cdir"
 fi
 rm -rf "$(dirname "$cdir")"
 
