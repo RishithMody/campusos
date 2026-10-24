@@ -3,6 +3,11 @@
 Five phases. The ordering principle: **keep the minimum viable submission ahead of optional
 experiments at every point.** At the end of each phase there is something submittable.
 
+**Three tracks, one product.** Track 1 is a Cubbie Skill and is mandatory; it gates Tracks 2 and
+3, which are judged privately and share one submission window. All three are surfaces over one
+backend — see `docs/adr/0001-three-track-unified-architecture.md`. Verified rules, with sources,
+are in `docs/hackathon-requirements.md`.
+
 If the schedule compresses, work is dropped from the bottom: T6 first, then the richer frontend,
 then live inference — never the submission requirements or the working negotiation demo.
 
@@ -15,20 +20,24 @@ then live inference — never the submission requirements or the working negotia
 | Work | Task | Agent | State |
 |---|---|---|---|
 | Orchestration infrastructure | — | — | ✅ **done** (2026-10-24) |
-| Verify hackathon requirements & submission constraints | T0 | Orchestrator | **next** |
-| Cubbie Skill deliverable (mandatory, Track 1) | T0b | Orchestrator | blocked on T0 |
-| Architecture & shared contracts | T1 | Orchestrator | ready |
+| Verify hackathon requirements & submission constraints | T0 | Orchestrator | ✅ **done** (2026-10-24) — `REVIEW` |
+| Cubbie Skill deliverable (mandatory, Track 1) | T0b | Orchestrator | **blocked on the human** (D1–D3) |
+| Architecture & shared contracts, all three tracks | T1 | Orchestrator | **next** |
 
 **Exit criteria**
-- Hackathon rules documented **with source URLs and dates** — no unverified assumptions left
-  masquerading as facts
-- Cubbie Skill requirement confirmed and its format captured
-- `contracts/` published and validated; file ownership for T2–T5 declared and disjoint
-- `./scripts/agents.sh doctor` green
+- ✅ Hackathon rules documented **with source URLs and dates** — `docs/hackathon-requirements.md`
+- ✅ Cubbie Skill requirement confirmed: a folder with a `SKILL.md` in a public GitHub repo
+- [ ] `contracts/` published and validated; ownership for T2–T5 and T9 declared and disjoint
+- [ ] `./scripts/agents.sh doctor` green
 
-**Why T0 before T1:** T0 is a few hours of reading that can invalidate T1's assumptions. Doing
-it second means discovering a format requirement after four agents have built toward the wrong
-artifact.
+**Why T0 went first:** it paid for itself immediately. It found that all three windows are open
+with **no deadline set**, that Track 1 gates the other two tracks, that Cubbie cannot do group
+chat, and that the originally briefed Track 1 product duplicates a Skill Cubbie already ships.
+Each of those would have been discovered late and expensively. See
+`docs/adr/0001-three-track-unified-architecture.md`.
+
+**The new Phase 0 exit gate is a submitted Track 1 entry.** It is the only mandatory deliverable,
+it unlocks Tracks 2 and 3, and it is scored on votes accumulated over time.
 
 ---
 
@@ -104,8 +113,11 @@ GPU-hour budget. If Phase 4 needs attention, T6 is cancelled without debate.
 | Work | Task | Agent |
 |---|---|---|
 | Next.js dashboard, chat, live negotiation visualisation | T5 | Frontend (Codex) |
+| Group chat assistant on Discord (Track 3) | T9 | Frontend (Codex) |
 | End-to-end integration + full test suite | T7 | QA (Codex) + Orchestrator |
-| Demo script, docs, submission | T8 | Orchestrator |
+| Track 2 submission package | T10 | Orchestrator |
+| Track 3 submission package | T11 | Orchestrator |
+| Demo script, docs, all-track submission check | T8 | Orchestrator |
 
 **Exit criteria**
 - Full stack up from one documented command
@@ -123,7 +135,11 @@ GPU-hour budget. If Phase 4 needs attention, T6 is cancelled without debate.
 1. **T6** (fine-tuning) — optional by design
 2. Frontend polish beyond the negotiation visualisation
 3. Live inference (fall back to mock mode for the demo)
-4. — nothing below this line is droppable —
-5. Privacy/authorization tests (the product's core claim)
-6. Working three-agent negotiation (the demo)
-7. Mandatory submission deliverables, T0b included (missing one scores zero)
+4. **Track 3** (T9, T11) — a whole track, but an optional one; dropping it costs one entry
+   and nothing else, because it shares the backend rather than owning any of it
+5. **Track 2** (T10) — drop only after Track 3
+6. — nothing below this line is droppable —
+7. Privacy/authorization tests (the product's core claim)
+8. Working three-agent negotiation (the demo)
+9. **Track 1 (T0b)** — mandatory. Missing it scores zero *and* forfeits eligibility for the
+   other two tracks. It is also the cheapest thing in this list. Ship it first, not last.

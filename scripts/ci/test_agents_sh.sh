@@ -56,6 +56,19 @@ t "review: missing worktree"      1 $A review backend
 t "cleanup: missing worktree"     1 $A cleanup backend
 t "cleanup: unknown argument"     1 $A cleanup nosuchthing
 
+echo "Three-track task IDs are known to the tooling"
+# T9/T10/T11 were added when the project expanded to all three Cubbie tracks. A task the
+# script does not know is refused by create, so an unknown ID would silently block the work.
+t "create: T9 is a known task"    1 $A create frontend T9
+t "create: T10 is a known task"   1 $A create orchestrator T10
+t "create: T11 is a known task"   1 $A create orchestrator T11
+# Exit 1 above is the BLOCKED-dependency guard, not an unknown-task error. Distinguish the
+# two by their messages: an unknown ID says so explicitly.
+t "T9 is not reported unknown"    1 bash -c "$A create frontend T9 2>&1 | grep -q 'unknown task'"
+t "T10 is not reported unknown"   1 bash -c "$A create orchestrator T10 2>&1 | grep -q 'unknown task'"
+t "T11 is not reported unknown"   1 bash -c "$A create orchestrator T11 2>&1 | grep -q 'unknown task'"
+t "T99 is still reported unknown" 0 bash -c "$A create ml T99 2>&1 | grep -q 'unknown task'"
+
 echo "CI helper scripts"
 t "validate_contracts (pre-T1)"   0 python3 -I scripts/ci/validate_contracts.py
 t "validate_contracts --strict"   1 python3 -I scripts/ci/validate_contracts.py --strict

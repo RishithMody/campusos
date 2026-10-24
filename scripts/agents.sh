@@ -80,13 +80,16 @@ task_slug() {
     T6)  echo "finetune" ;;
     T7)  echo "integration" ;;
     T8)  echo "submission" ;;
+    T9)  echo "groupchat" ;;
+    T10) echo "track2-submission" ;;
+    T11) echo "track3-submission" ;;
     *) return 1 ;;
   esac
 }
 
 # Tasks that consume one of the MAX_IMPL_AGENTS slots.
 is_impl_task() {
-  case "$1" in T2|T3|T4|T5|T6) return 0 ;; *) return 1 ;; esac
+  case "$1" in T2|T3|T4|T5|T6|T9) return 0 ;; *) return 1 ;; esac
 }
 
 field() { echo "$1" | awk -v i="$2" '{print $i}'; }

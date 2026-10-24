@@ -35,27 +35,66 @@ themselves if `task/T1-architecture` already exists.
 
 ## 1. Phase 0 — the Orchestrator goes first
 
-Nothing else may start until T1 is done: T2–T5 all build against the contracts T1 publishes.
+**T0 is done.** The verified rules, with sources, are in `docs/hackathon-requirements.md`. Read
+its "Open decisions for the human" table before anything else — five decisions (D1–D5) are yours,
+and three of them block the only mandatory deliverable.
+
+### 1a. Ship Track 1 (T0b) — do this before the product build
+
+Verified: a Track 1 entry is **a folder with a `SKILL.md` in a public GitHub repo**. No review
+gate, editable while the window is open, and edits keep accumulated votes. Track 1 also unlocks
+Tracks 2 and 3, which the organizers' database refuses until Track 1 is in.
+
+All three windows are open and **no close time is set** (checked 2026-10-24T18:50:26Z). Times
+are never written down in the rules — they are read live, so re-check before planning around
+time. The official way, from a clone of the hackathon kit:
+
+```bash
+python3 scripts/hackathon.py status      # run from skills/cubbie-hackathon/ in the kit
+```
+
+The kit is <https://github.com/imaginix-inc/cubbie-hackathon-kit>. It reads the organizers'
+`settings` table with the site's publishable key, which the kit itself prints. A window with no
+close time has **no deadline set yet** — do not guess one, and do not treat the site's "first
+10 hours" as the cutoff.
+
+Once you have answered D1–D3:
 
 ```bash
 cd ~/campusos
-./scripts/agents.sh start orchestrator
+./scripts/agents.sh create orchestrator T0b
+./scripts/agents.sh start  orchestrator T0b
 ```
 
-This opens Claude Code in the primary worktree with T1's context. **Do T0 first** — tell it:
+**Nothing is submitted without your explicit yes.** An entry is public the moment it is sent.
 
-> Start with T0: read docs/agents/assignments/T0.md and verify the hackathon requirements.
-> No hackathon rule in this repo has been verified yet.
+### 1b. Architecture and contracts (T1)
 
-T0 needs you: supply the hackathon URL and rules, and confirm the official source.
+T2–T5 and T9 all build against the contracts T1 publishes, so nothing else may start until it
+is done. T1 depends on nothing and can run in parallel with your D1–D3 decisions.
 
-When T0 and T1 are done, the Orchestrator writes the T2–T5 assignments and moves T2/T3/T4 to
+```bash
+cd ~/campusos
+./scripts/agents.sh create orchestrator T1
+./scripts/agents.sh start  orchestrator T1
+```
+
+When T1 is done, the Orchestrator writes the T2–T5 and T9 assignments and moves T2/T3/T4 to
 `READY`. Then you merge T1:
 
 ```bash
 ./scripts/agents.sh review T1                  # codex reviews the contracts independently
 git -C ~/campusos merge --no-ff task/T1-architecture
 ```
+
+**The contracts only exist on the T1 branch until you merge.** Do not `create` T2/T3/T4 before
+the merge, or they will branch from a `main` with no `contracts/`.
+
+### 1c. Tracks 2 and 3
+
+Both are judged privately and **their criteria are not yet announced**. Track 2 is T7 → T10;
+Track 3 is T9 → T11. Both require the Track 1 entry to exist first. T9 is a Discord bot, not a
+Cubbie integration — Cubbie has no group chat (see ADR 0001).
 
 ---
 

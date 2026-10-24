@@ -5,119 +5,163 @@ A task may not start until every dependency is `DONE`.
 
 Status values: `BLOCKED` → `READY` → `IN_PROGRESS` → `REVIEW` → `DONE`
 
-Last updated: 2026-10-24 (orchestration setup)
+Last updated: 2026-10-24 (T0 complete — scope expanded to all three tracks)
 
 ---
 
-## ⚠️ Unverified assumption — resolve in T0 before anything else
+## ✅ Requirements are now verified — read this before planning anything
 
-The hackathon requirements below are **recorded as assumptions, not verified facts.** Nobody
-has checked the current Cubbie Hackathon rules yet. In particular the **mandatory Cubbie Skill
-submission** is treated here as a hard deliverable because it was identified as one, but its
-exact format, scope, and deadline are **unknown to this repository**.
+`docs/hackathon-requirements.md` records the official rules with a source URL and date for every
+claim. T0 replaced the old assumptions. The four findings that reshape this graph:
 
-T0 exists to replace these assumptions with verified, cited rules. Do not build toward a
-submission format that has not been confirmed. If T0 finds the rules differ, the Orchestrator
-updates this graph before any dependent task proceeds.
+1. **All three submission windows are OPEN right now, and no close time is set.** Queried live
+   2026-10-24T18:50:26Z. There is **no verified deadline** — the site's "first 10 hours" is not
+   the authoritative cutoff, and the authoritative one is `null`. Re-check before any time-based
+   decision.
+2. **Track 1 is the gate.** Tracks 2 and 3 are refused by the organizers' database until the team
+   has a Track 1 entry. Their window is already open; only our own Track 1 entry blocks us.
+3. **A Track 1 Skill is a folder with a `SKILL.md` in a public GitHub repo.** That is the whole
+   bar. No app, no backend, no manifest. There is no review gate, entries are editable while the
+   window is open, and edits keep accumulated votes — so **submitting early is free and strictly
+   better**, because Track 1 is scored largely on public votes over time.
+4. **Cubbie cannot do group chat and cannot text anyone but its own student.** Track 3 therefore
+   cannot be built on Cubbie, and Track 2's agent-to-agent traffic cannot flow through Cubbie.
+   Both are explicitly allowed to use any messaging app and any open-source framework.
+
+**Still unverified** (see the `## Unverified` section of the requirements doc): every deadline,
+kickoff time, Track 2/3 judging criteria, the vote-vs-social weighting, and video length rules.
+Ask the organizers: <https://discord.gg/7eJADTbQMT>.
+
+## ⛔ Blocked on human decisions
+
+`T0b` cannot ship until the human answers D1–D5 in `docs/hackathon-requirements.md`:
+repo visibility, team roster and entry owner, the Track 1 pivot, Track 3 on Discord, and whether
+to submit Track 1 early. Nothing is published without that sign-off.
 
 ---
 
 ## DAG
 
 ```
-T0 ─────────────────────────────────────────────┐
- │  (requirements verified)                     │
- └──> T0b (Cubbie Skill submission) ────────────┤
-                                                │
-T1 ──┬──> T2 (backend) ──────────────┐          │
-     │                               │          │
-     ├──> T3 (GPU inference) ──┬─────┤          │
-     │                         │     │          │
-     ├──> T4 (ML baseline) ────┴──> T6          │
-     │                         (optional)       │
-     └──> T5 (frontend) ───────────┐            │
-                                   │            │
-                     T2 + T3 + T5 ─┴──> T7 ──> T8
+T0 (DONE) ──> T0b  Track 1 Skill ── submit early ──┐
+                    │  unlocks Tracks 2 and 3      │
+                    │                              │
+T1 (contracts, all three tracks)                   │
+ │                                                 │
+ ├──> T2 (backend) ────────────┐                   │
+ ├──> T3 (GPU inference) ──┬───┤                   │
+ ├──> T4 (ML baseline) ────┴──> T6 (optional)      │
+ ├──> T5 (frontend / viz) ─────┤                   │
+ │                             │                   │
+ │                   T2+T3+T5 ─┴──> T7 ──> T10 (Track 2 submission) ──┐
+ │                                                                    │
+ └──> T9 (Track 3 group chat) ─────────> T11 (Track 3 submission) ────┤
+                                                                      │
+                                                      T0b + T10 + T11 ┴──> T8 (final)
 ```
 
-Critical path to a submittable demo: **T1 → T2 → T7 → T8**.
+**Critical path to a *valid* submission: `T0b` alone.** It needs no other task and can ship today.
+**Critical path to the full product: `T1 → T2 → T7 → T10`.**
 T6 is off the critical path and must never delay T8.
+
+One product, three entries: the availability envelope written in T1 is the Track 1 Skill's output,
+the Track 2 agent-to-agent message, and the Track 3 group-chat payload. The backend is shared.
 
 ## Status board
 
-| ID | Task | Agent | CLI | Depends on | Status |
-|---|---|---|---|---|---|
-| T0 | Verify hackathon requirements & submission constraints | Orchestrator | Claude Code | — | `READY` |
-| T0b | Cubbie Skill submission (mandatory deliverable) | Orchestrator | Claude Code | T0 | `BLOCKED` |
-| T1 | Architecture & shared contracts | Orchestrator | Claude Code | — | `READY` |
-| T2 | Backend implementation | Backend Engineer | Codex | T1 | `BLOCKED` |
-| T3 | GPU inference setup (vLLM) | GPU Infra Engineer | Codex | T1 | `BLOCKED` |
-| T4 | ML evaluation baseline | ML Engineer | Claude Code | T1 | `BLOCKED` |
-| T5 | Frontend implementation | Frontend Engineer | Codex | T1 + stable `contracts/` | `BLOCKED` |
-| T6 | Optional LoRA fine-tuning | ML Engineer | Claude Code | T3, T4 | `BLOCKED` |
-| T7 | End-to-end integration | QA / Orchestrator | Codex + Claude Code | T2, T3, T5 | `BLOCKED` |
-| T8 | Final hackathon demo & submission | Orchestrator | Claude Code | T0, T7 | `BLOCKED` |
+| ID | Task | Track | Agent | CLI | Depends on | Status |
+|---|---|---|---|---|---|---|
+| T0 | Verify hackathon requirements | all | Orchestrator | Claude Code | — | `REVIEW` |
+| T0b | **Track 1 Cubbie Skill + submission** | 1 | Orchestrator | Claude Code | T0 + D1–D5 | `BLOCKED` (human) |
+| T1 | Architecture & shared contracts | all | Orchestrator | Claude Code | — | `READY` |
+| T2 | Backend implementation | 1·2·3 | Backend Engineer | Codex | T1 | `BLOCKED` |
+| T3 | GPU inference setup (vLLM) | 2·3 | GPU Infra Engineer | Codex | T1 | `BLOCKED` |
+| T4 | ML evaluation baseline | 2 | ML Engineer | Claude Code | T1 | `BLOCKED` |
+| T5 | Frontend: negotiation visualisation | 2 | Frontend Engineer | Codex | T1 + stable `contracts/` | `BLOCKED` |
+| T6 | Optional LoRA fine-tuning | 2 | ML Engineer | Claude Code | T3, T4 | `BLOCKED` |
+| T7 | End-to-end integration | 2 | QA / Orchestrator | Codex + Claude Code | T2, T3, T5 | `BLOCKED` |
+| T8 | Final demo & all-track submission check | all | Orchestrator | Claude Code | T0b, T10, T11 | `BLOCKED` |
+| T9 | **Track 3 group chat assistant (Discord)** | 3 | Frontend Engineer | Codex | T1, T2 | `BLOCKED` |
+| T10 | **Track 2 submission package** | 2 | Orchestrator | Claude Code | T0b, T7 | `BLOCKED` |
+| T11 | **Track 3 submission package** | 3 | Orchestrator | Claude Code | T0b, T9 | `BLOCKED` |
 
-T0 and T1 are both `READY` and both belong to the Orchestrator. Do T0 first — it is cheap, and
-it can invalidate T1's assumptions.
+**T0b is the highest-priority task in the project.** It is small, it is the only mandatory
+deliverable, and it unlocks the other two tracks. Do not let the product build delay it.
 
 ---
-
 ## T0 — Verify hackathon requirements and submission constraints
 
 | | |
 |---|---|
 | **Agent** | Orchestrator (Claude Code) |
 | **Depends on** | — |
-| **Status** | `READY` |
+| **Status** | `REVIEW` — findings complete, awaiting human sign-off on D1–D5 |
 | **Branch / worktree** | `main` in `~/campusos` (docs only) |
 | **Owns** | `docs/hackathon-requirements.md` |
 
-**Why first:** every downstream deliverable is shaped by rules nobody has read yet. This task is
-hours of reading that can save days of building the wrong artifact.
+**Output:** `docs/hackathon-requirements.md`, 10 sources, every claim dated and cited.
 
 ### Acceptance criteria
-- [ ] `docs/hackathon-requirements.md` exists and records, **each with a source URL and the date
-      checked**: submission deadline, required deliverables, the Cubbie Skill requirement and its
-      exact format, judging criteria, team/eligibility rules, demo format and time limit,
-      licensing or open-source requirements, and any model/compute restrictions.
-- [ ] The **mandatory Cubbie Skill** requirement is confirmed or refuted in writing. If confirmed,
-      its required structure is captured well enough for T0b to be actionable.
-- [ ] Anything that could not be verified is listed under an explicit `## Unverified` heading
-      rather than guessed at.
-- [ ] This task graph is updated if the rules contradict any assumption in it.
+- [x] Deadline, deliverables, Cubbie Skill format, judging, team rules, repo visibility, and
+      model/compute restrictions recorded with a source URL and date checked
+- [x] The Cubbie Skill requirement **confirmed**: mandatory for every team, and it is a folder
+      with a `SKILL.md` in a public GitHub repo. Format captured well enough for T0b to act on.
+- [x] Everything unverifiable listed under an explicit `## Unverified` heading (10 items,
+      led by: **no deadline is set**)
+- [x] This task graph updated where the rules contradicted it (three contradictions, C1–C3)
 
 ### Required tests
 None (documentation task). Verification = every claim carries a source URL and a date.
 
-**Hard rule:** do not invent a rule to fill a gap. "Not stated in the published rules" is the
-correct entry. A fabricated requirement here propagates into every other task.
+**Why it is `REVIEW`, not `DONE`:** the reviewer for T0 is the human, and five decisions
+(D1–D5) are theirs to make. The Orchestrator does not self-certify a facts task.
 
 ---
 
-## T0b — Cubbie Skill submission
+## T0b — Track 1 Cubbie Skill (mandatory deliverable)
 
 | | |
 |---|---|
 | **Agent** | Orchestrator (Claude Code) |
-| **Depends on** | T0 |
-| **Status** | `BLOCKED` (pending T0) |
+| **Depends on** | T0 **and** human decisions D1, D2, D3 |
+| **Status** | `BLOCKED` — on the human, not on engineering |
 | **Branch / worktree** | `task/T0b-cubbie-skill` → `~/campusos-worktrees/T0b-cubbie-skill` |
-| **Owns** | `submission/cubbie-skill/` |
+| **Owns** | `skills/squad-sync/`, `submission/track1/` |
 
-Identified as a **mandatory early deliverable**. Scheduled early and deliberately off the
-critical path of the product build, so a late-stage product crunch cannot cause the team to
-miss a required submission artifact.
+**The highest-priority task in the project.** It is the only mandatory deliverable, it gates
+Tracks 2 and 3, and it is scored on votes accumulated over time — so every day it is not live
+is a day of scoring lost. It is also small: a `SKILL.md` in a public repo is the entire bar.
+
+**Scope decision (phase 1): instructions only, no backend.** The Skill uses Cubbie's connected
+abilities (Canvas, Google Calendar, reminders, documents) and has the student share the result
+themselves. The hosted-API version is a later push to the same repo — Cubbie always installs the
+newest commit, so the entry never needs resubmitting. This keeps Track 1 independent of whether
+our backend is up.
 
 ### Acceptance criteria
-- [ ] Deliverable matches the format verified in T0, field by field
-- [ ] Submitted (or ready to submit) well before the deadline, not on the deadline
+- [ ] `SKILL.md` exists with valid frontmatter: `name` matching `^[a-z0-9]+(?:-[a-z0-9]+)*$`
+      (≤64 chars), `description` ≤1024 chars whose **first sentence is ≤200 chars**
+- [ ] Body ≤500 lines; only the spec frontmatter fields
+      (`name`, `description`, `license`, `compatibility`, `metadata`, `allowed-tools`)
+- [ ] `python3 validate_cubbie_skill.py <folder>` reports no `FAIL` (warnings reviewed)
+- [ ] Names Cubbie's abilities **in plain words** — never tool names, parameters or JSON
+- [ ] States what to do when Canvas or Google is **not connected** (every connected ability
+      needs a fallback)
+- [ ] Every send/book/submit step waits for the student's explicit yes
+- [ ] Description says what it adds over the built-in `study-plan-builder`, so Cubbie can tell
+      the two apart
+- [ ] Installed from its GitHub link on a **real Cubbie account** and the main flow works
 - [ ] Contains no secrets, credentials, or private student data
-- [ ] A human has reviewed it against the official requirements checklist
+- [ ] Submitted: repo link, team (1–4 members, name + email), project name ≤60, one-liner ≤140
+- [ ] A human has reviewed it against `docs/hackathon-requirements.md` §3 and §8
 
 ### Required tests
-Validation against the official format/schema if the rules publish one; otherwise a documented
-human checklist review. **Scope is provisional until T0 completes.**
+- `validate_cubbie_skill.py` clean of `FAIL` — real output pasted in the handoff
+- A manual install-and-run check on a real Cubbie account, recorded honestly. "Could not test,
+  no Cubbie access" is a correct answer; a claimed pass that did not happen is not.
+
+**Blocked on:** D1 (repo public, and which repo), D2 (roster + entry owner), D3 (confirm the
+pivot away from solo study planning, which collides with Cubbie's built-in `study-plan-builder`).
 
 ---
 
@@ -131,27 +175,41 @@ human checklist review. **Scope is provisional until T0 completes.**
 | **Branch / worktree** | `task/T1-architecture` → `~/campusos-worktrees/T1-architecture` |
 | **Owns** | `docs/architecture.md`, `contracts/`, `docs/adr/` |
 
-The highest-leverage task in the project. Three agents build against these contracts in parallel;
-every ambiguity here becomes a merge conflict or an integration failure later.
+The highest-leverage engineering task. Four agents build against these contracts in parallel;
+every ambiguity here becomes a merge conflict or an integration failure in T7.
+
+**Now scoped to all three tracks.** The same disclosure-controlled availability envelope must
+serve the Track 1 Skill's output, the Track 2 agent-to-agent message, and the Track 3 group-chat
+payload. One schema, three surfaces — that is what makes this one product rather than three.
 
 ### Acceptance criteria
 - [ ] `docs/architecture.md`: component diagram, request flow for a negotiation, data model
       overview, trust boundaries, and where the privacy guarantee is enforced
+- [ ] The nine modules named in the expanded brief are placed in the diagram, each owned by
+      exactly one task: Cubbie adapter, Skill execution layer, personal agent runtime,
+      A2A protocol, group-chat layer, privacy/approval service, persistence, inference
+      abstraction, evaluation/observability
 - [ ] `contracts/agent-protocol.schema.json`: the agent-to-agent message envelope — sender
       identity, represented student, scope of authority, **disclosure level**, intent
       (propose/counter/accept/reject/escalate), payload, trace ID
-- [ ] `contracts/api.openapi.yaml`: REST surface for frontend ↔ backend
+- [ ] `contracts/api.openapi.yaml`: REST surface for frontend ↔ backend **and** the HTTPS surface
+      a Cubbie Skill script may call (the only integration path Cubbie's sandbox allows)
 - [ ] `contracts/negotiation-state.schema.json`: the LangGraph state the frontend visualizes
 - [ ] `contracts/inference.md`: the inference interface backend and ML both code against, so
       mock and vLLM are drop-in replacements for each other
+- [ ] `contracts/availability.schema.json`: the minimum-disclosure availability envelope shared
+      by all three tracks
 - [ ] Every schema is valid JSON Schema / OpenAPI and parses (`./scripts/ci/validate_contracts.py`)
 - [ ] Disclosure levels are enumerated and defined (what may be revealed at each level)
-- [ ] File ownership for T2–T5 is declared and **disjoint**
-- [ ] Assignment files for T2–T5 written and those tasks moved to `READY`
+- [ ] File ownership for T2–T5 and T9 is declared and **disjoint**
+- [ ] Assignment files for T2–T5 and T9 written and those tasks moved to `READY`
 
 ### Required tests
 `./scripts/ci/validate_contracts.py` passes. Each schema has at least one valid and one
 deliberately invalid example fixture, and the invalid one is correctly rejected.
+
+**Constraint from T0:** no MCP. Cubbie's sandbox does not support MCP servers, remote or local.
+The Skill↔platform boundary is plain HTTPS on port 443 to a publicly reachable host.
 
 ---
 
@@ -360,22 +418,24 @@ token in `docs/agents/assignments/T6.md` before a single training step runs.
 
 ---
 
-## T8 — Final hackathon demo and submission
+## T8 — Final demo and all-track submission check
 
 | | |
 |---|---|
 | **Agent** | Orchestrator (Claude Code) |
-| **Depends on** | T0, T7 |
+| **Depends on** | T0b, T10, T11 |
 | **Status** | `BLOCKED` |
 | **Branch / worktree** | `task/T8-submission` → `~/campusos-worktrees/T8-submission` |
 | **Owns** | `submission/`, `README.md`, `docs/demo-script.md` |
 
 ### Acceptance criteria
-- [ ] Every verified T0 requirement satisfied, checked off item by item against the rules doc
-- [ ] Cubbie Skill deliverable (T0b) submitted and confirmed
+- [ ] Every verified T0 requirement satisfied, checked item by item against
+      `docs/hackathon-requirements.md` — including the field limits in §8
+- [ ] **All three entries live in the gallery** and owned by the correct account
+- [ ] Track 1 entry confirmed installable from its public GitHub link on a real Cubbie account
 - [ ] Demo runs reliably from a clean clone, rehearsed end to end at least twice
-- [ ] Demo fits the official time limit, with a **mock-mode fallback** if the cluster is down
-      mid-demo — never let a live GPU dependency be a single point of failure on stage
+- [ ] Demo has a **mock-mode fallback** if the cluster is down mid-demo — never let a live GPU
+      dependency be a single point of failure on stage
 - [ ] README: what it is, why the privacy model matters, how to run it, architecture summary
 - [ ] Honest results section: measured numbers only, limitations stated plainly
 - [ ] Repository contains no secrets, credentials, or private data
@@ -388,11 +448,126 @@ token in `docs/agents/assignments/T6.md` before a single training step runs.
 
 ---
 
+## T9 — Track 3 group chat assistant (Discord)
+
+| | |
+|---|---|
+| **Agent** | Frontend Engineer (Codex) |
+| **Reviewer** | Claude Code |
+| **Depends on** | T1, T2 |
+| **Status** | `BLOCKED` |
+| **Branch / worktree** | `task/T9-groupchat` → `~/campusos-worktrees/T9-groupchat` |
+| **Owns** | `groupchat/`, `tests/groupchat/` |
+| **Read-only** | `contracts/` |
+
+**Why not Cubbie:** Cubbie has no group chat and cannot text anyone but its own student
+(`docs/hackathon-requirements.md` §6, C1). The rules explicitly allow any messaging app. Discord
+is the recommendation — free bot API, the organizers already run a Discord, and it screen-records
+well for the demo. **Confirm D4 before starting.**
+
+The group chat is the *group-side surface of the same negotiation* the personal agents run. It
+must reuse `contracts/availability.schema.json` and the backend from T2, not reimplement them.
+
+### Acceptance criteria
+- [ ] Bot joins a server channel and responds to a scheduling request in that channel
+- [ ] Shared study planning: collects each member's availability **without revealing why**
+      anyone is busy — disclosure level enforced server-side, not in the bot
+- [ ] Group scheduling produces a concrete proposed time from conflicting constraints
+- [ ] Collective decision flow: members confirm or decline; the decision is recorded
+- [ ] Approval and confirmation flow: nothing is booked until the required confirmations land
+- [ ] Visibility into agent decisions **where permitted** — shows what was shared, never more
+- [ ] Degrades honestly when the backend is down; never leaks private data in an error
+- [ ] Runs against the mock backend with no GPU
+- [ ] No bot token, secret, or credential in Git; token comes from the environment
+
+### Required tests
+- `pytest tests/groupchat/` green
+- Disclosure test: the bot never posts a field above the permitted level, even when the API
+  returns one
+- Group negotiation test: three members with conflicting constraints converge, or escalate
+
+---
+
+## T10 — Track 2 submission package
+
+| | |
+|---|---|
+| **Agent** | Orchestrator (Claude Code) |
+| **Depends on** | T0b (eligibility), T7 |
+| **Status** | `BLOCKED` |
+| **Owns** | `submission/track2/` |
+
+Track 2 is judged privately on what we show. Full criteria are **not yet announced** — recheck
+before finalising.
+
+### Acceptance criteria
+- [ ] Working prototype tied to a real campus scenario, runnable from one documented command
+- [ ] Demonstrates, explicitly and on screen: **how agents handle conflicting constraints, what
+      they share, and when they ask their students to confirm** (the rules' own wording)
+- [ ] A clear stated reason students would say "we need this"
+- [ ] Public GitHub repo link ready; website and demo video optional
+- [ ] Submitted from the **same account** that owns the Track 1 entry
+- [ ] Field limits respected: project name ≤60, one-liner ≤140, 1–4 members, `https://` links
+
+---
+
+## T11 — Track 3 submission package
+
+| | |
+|---|---|
+| **Agent** | Orchestrator (Claude Code) |
+| **Depends on** | T0b (eligibility), T9 |
+| **Status** | `BLOCKED` |
+| **Owns** | `submission/track3/` |
+
+### Acceptance criteria
+- [ ] Working group-chat prototype tied to a real campus scenario
+- [ ] Shows what the assistant shares and when it asks for confirmation
+- [ ] Public GitHub repo link ready; website and demo video optional
+- [ ] Submitted from the same account that owns the Track 1 entry
+- [ ] Field limits respected, as T10
+
+---
+
+## Submission checklists
+
+One per track. Tick these against `docs/hackathon-requirements.md` §8 before sending anything.
+**An entry is public the moment it is sent.**
+
+### Track 1 · Cubbie Skills
+- [ ] Public GitHub repo; link is `https://github.com/<owner>/<repo>` or a folder inside it
+- [ ] Folder contains a readable `SKILL.md`; validator reports no `FAIL`
+- [ ] Installed from that link on a real Cubbie account; main flow works
+- [ ] Team name ≤60 · project name ≤60 · one-liner ≤140 · 1–4 members with distinct emails
+- [ ] Signed in as the intended **owner**, with the school email
+- [ ] Demo video (optional) on TikTok or Instagram, public
+- [ ] Previewed the entry and got an explicit human yes before sending
+
+### Track 2 · Agent-to-Agent Coordination
+- [ ] Track 1 entry already submitted (the database refuses otherwise)
+- [ ] Public GitHub repo (preview card requires public)
+- [ ] Conflicting constraints, what is shared, and the confirmation step are all visible
+- [ ] Same owner account as Track 1
+- [ ] Website and demo video optional — include if they strengthen a private judging round
+
+### Track 3 · Group Chat Assistant
+- [ ] Track 1 entry already submitted
+- [ ] Public GitHub repo
+- [ ] Runs in a real group chat on a supported messaging app
+- [ ] Same owner account as Track 1
+- [ ] Website and demo video optional
+
+---
+
 ## Concurrency rules
 
 - **Maximum three concurrent implementation agents.** `./scripts/agents.sh create` enforces it.
+- **T0b comes before the product build.** It is an Orchestrator task, small, and it unlocks the
+  other two tracks. Do not spend an implementation slot before it is submitted.
 - First parallel batch, after T1 is `DONE`: **T2 (backend), T3 (GPU), T4 (ML)**.
-- T5 (frontend) starts when contracts are stable — typically as T3 or T4 finishes.
+- Second batch: **T5 (frontend)** when contracts are stable, then **T9 (group chat)** once T2
+  exposes a working mock backend. T5 and T9 are both the Frontend Engineer — they run in
+  sequence, not together.
 - The QA Reviewer runs at checkpoints and does not occupy an implementation slot.
 - The Orchestrator coordinates and does not write feature code.
 - No nested agent swarms. One session, one task.
