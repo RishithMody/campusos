@@ -776,10 +776,42 @@ components:
     ChannelSummary:
       type: object
       description: |
-        The only shape the Track 3 bot ever posts. Small on purpose — it is written for a room,
+        The only shape the Track 3 bot ever posts. Small on purpose -- it is written for a room,
         not for a participant. There is no availability envelope here at any level: a channel
         never needs to know when anyone is busy, only whether a time was found.
-      required: [negotiation_id, status, round, max_rounds, text]
+
+        **There is no free text.** An earlier version carried a server-composed `text` string,
+        which meant the one sentence that reaches a group chat was the one thing no schema could
+        check -- it rested entirely on the backend never composing a careless sentence. Instead
+        the server picks a `template_id` from a closed list and the bot renders it from the
+        typed fields here. A template is a constant in both codebases; the slots are integers
+        and a timestamp. Neither side can emit a sentence nobody wrote in advance, and an LLM
+        is never in this path.
+
+        **The exact templates.** Both T2 and T9 implement this table verbatim, so the rendered
+        output is identical whoever renders it:
+
+        | `template_id` | Rendered | Slots used |
+        |---|---|---|
+        | `gathering_availability` | "Collecting availability from {participant_count} people." | `participant_count` |
+        | `proposal_on_table` | "There's a time on the table -- round {round} of {max_rounds}." | `round`, `max_rounds` |
+        | `awaiting_approvals` | "Waiting on everyone to confirm." | -- |
+        | `converged` | "Locked in: {agreed_slot}." | `agreed_slot` |
+        | `failed_no_overlap` | "No time works for everyone in this window." | -- |
+        | `failed_max_rounds` | "No time found in {max_rounds} rounds -- over to you." | `max_rounds` |
+        | `expired` | "This one timed out." | -- |
+        | `cancelled` | "Someone withdrew, so this is off." | -- |
+        | `consent_withdrawn` | "I've been asked to stop posting about this one." | -- |
+
+        `{agreed_slot}` is formatted from the timestamps in the channel's own timezone. No
+        template interpolates a name, a label, a category, a reason or any free string, and
+        there is deliberately no `other` or `custom` id: an escape hatch here would be the
+        whole hole reopened.
+
+        **No participant names.** A previous draft carried consented display names. The room
+        already knows who is in it, and a name in a summary tells non-participants who is
+        negotiating with whom. Dropped rather than gated.
+      required: [negotiation_id, status, round, max_rounds, template_id, participant_count]
       additionalProperties: false
       properties:
         negotiation_id: { type: string, pattern: "^neg_[A-Za-z0-9]{16,64}$" }
@@ -788,32 +820,42 @@ components:
           enum: [gathering, negotiating, awaiting_approval, converged, failed, expired, cancelled]
         round: { type: integer, minimum: 0 }
         max_rounds: { type: integer, minimum: 1, maximum: 20 }
-        text:
+        template_id:
+          description: Which allowlisted sentence to render. Closed, and deliberately without an escape hatch.
           type: string
-          maxLength: 280
-          description: |
-            The post, composed server-side. The bot sends this verbatim. It must not rewrite or
-            embellish it: paraphrasing a `reason_code` back into prose is the leak the closed
-            vocabulary exists to prevent, and a group chat is the worst place to discover that.
+          enum:
+            - gathering_availability
+            - proposal_on_table
+            - awaiting_approvals
+            - converged
+            - failed_no_overlap
+            - failed_max_rounds
+            - expired
+            - cancelled
+            - consent_withdrawn
+        participant_count:
+          type: integer
+          minimum: 2
+          maximum: 12
+          description: How many people are negotiating. A count, never who.
         agreed_slot:
           type: object
-          description: Present only once converged and approved. A time, never a reason.
+          description: Present only with template_id `converged`. A time, never a reason.
           required: [start, end]
           additionalProperties: false
           properties:
             start: { type: string, format: date-time }
             end: { type: string, format: date-time }
-        reason_code:
+        timezone:
           type: string
-          enum: [conflict, outside_preferred_hours, too_short, no_overlap, needs_human, expired, insufficient_authority]
-        named_participants:
-          type: array
-          maxItems: 12
-          description: |
-            Display names only, and only for participants who are channel members and consented
-            to be named there. Someone in the negotiation but not in the channel is never named,
-            and never implied by a count.
-          items: { type: string, maxLength: 40 }
+          minLength: 3
+          description: IANA zone the bot formats agreed_slot in, so the room sees its own local time.
+      allOf:
+        - if:
+            properties: { template_id: { const: converged } }
+            required: [template_id]
+          then:
+            required: [agreed_slot, timezone]
 
     Problem:
       type: object
