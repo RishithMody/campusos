@@ -91,7 +91,24 @@ CI. It must be:
 - **Plausibly slow** — a configurable small delay. A zero-latency mock hides race conditions that
   then appear for the first time on stage.
 
-## The vLLM implementation (T3)
+## Who implements which half
+
+T3's file ownership does not include `backend/`, so T3 cannot own a module that lives there.
+The split:
+
+| Piece | Path | Owner |
+|---|---|---|
+| `InferenceClient` Protocol, request/response types, exceptions | `backend/inference/base.py` | **T2** |
+| `MockInference` | `backend/inference/mock.py` | **T2** |
+| vLLM adapter — the client that speaks to the server | `backend/inference/vllm_client.py` | **T2** |
+| The vLLM server — config, launch, binding, teardown, benchmark | `infra/vllm/` | **T3** |
+
+T3 owns **serving**, not the adapter. T3 fixes the endpoint contract the adapter codes against
+(URL shape, model name, timeouts, health semantics) and records it in its handoff; T2 writes the
+Python. T4 imports only from `backend/inference/base.py` and never reaches past it into either
+implementation.
+
+## The vLLM server (T3)
 
 OpenAI-compatible API, Qwen3 8B, from committed config. Binding, `max_num_seqs ≤ 256`, teardown
 and benchmark requirements are T3's, in `docs/task-graph.md` and `docs/infra-policy.md`.
@@ -100,6 +117,11 @@ and benchmark requirements are T3's, in `docs/task-graph.md` and `docs/infra-pol
 endpoint, so if a Skill ever needs the platform it calls a CPU-only API gateway that holds the
 disclosure logic, and that gateway reaches inference privately. See `docs/adr/0001`.
 
-Selection is by environment: `CAMPUSOS_INFERENCE=mock|vllm`, with `mock` the default. A missing
-or unparseable value is a startup error, not a silent fallback — "it was secretly on the mock"
-is a result-invalidating failure for T4.
+Selection is by environment: **`CAMPUSOS_INFERENCE_MODE=mock|vllm`**. There is **no default**.
+Unset, empty or unrecognised is a startup error, not a silent fallback — "the benchmark was
+secretly on the mock" is a result-invalidating failure for T4, and a default is exactly how that
+happens. `.github/workflows/integration.yml` already sets this name, so the contract matches CI
+rather than asking CI to change.
+
+An earlier draft of this file said both "`mock` is the default" and "a missing value is a startup
+error", which cannot both be true. The startup error wins.

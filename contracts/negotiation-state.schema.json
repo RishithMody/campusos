@@ -4,7 +4,7 @@
   "title": "Negotiation state (v1)",
   "description": "The LangGraph state for one negotiation, and the thing the frontend renders live. This is a product surface, not an implementation detail: T5 draws it and T9 summarises it into a group chat, so it is designed to be read by a person, serialised, and versioned. Everything in it is already disclosure-filtered -- the state a given viewer receives never contains more than that viewer is entitled to see.",
   "type": "object",
-  "required": ["schema_version", "negotiation_id", "trace_id", "status", "round", "max_rounds", "participants", "updated_at"],
+  "required": ["schema_version", "negotiation_id", "trace_id", "state_version", "status", "round", "max_rounds", "participants", "viewer", "updated_at"],
   "additionalProperties": false,
   "properties": {
     "schema_version": { "const": "1.0" },
@@ -22,6 +22,75 @@
       "maximum": 20
     },
     "updated_at": { "type": "string", "format": "date-time" },
+    "state_version": {
+      "description": "Monotonic counter, incremented on every change. A human approving something must be approving the state they were shown: the decision carries the version it was made against, and the service rejects it as stale if the negotiation has moved on. Without this, 'approve' means 'approve whatever is current by the time this arrives'.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "viewer": {
+      "description": "Who the caller is inside this negotiation. Every other identifier here is a per-negotiation pseudonym, so without this a participant cannot pick itself out of the participants array -- it has no way to learn its own stu_ ref, which it needs to submit availability and to read its own approvals. Server-set; echoing a client-supplied value here would make the whole identity model client-controlled.",
+      "type": "object",
+      "required": ["student_ref", "agent_id", "max_disclosure_level"],
+      "additionalProperties": false,
+      "properties": {
+        "student_ref": { "type": "string", "pattern": "^stu_[A-Za-z0-9]{16,64}$" },
+        "agent_id": { "type": "string", "pattern": "^agt_[A-Za-z0-9]{16,64}$" },
+        "max_disclosure_level": {
+          "description": "The ceiling in force for this viewer in this negotiation. The UI uses it to show the student what their agent is allowed to reveal, before it reveals it.",
+          "enum": ["none", "free_busy", "category", "full"]
+        }
+      }
+    },
+    "pending_approvals": {
+      "description": "What this viewer is being asked to decide, and exactly what saying yes would reveal. Only ever the caller's own approvals -- one participant never sees another's pending decisions. This exists because informed consent has to come before the decision: an approval endpoint that describes the consequences only in its response is asking the student to agree to something they have not been shown.",
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "required": ["approval_id", "action", "discloses", "expires_at", "state_version"],
+        "additionalProperties": false,
+        "properties": {
+          "approval_id": { "type": "string", "pattern": "^apr_[A-Za-z0-9]{8,64}$" },
+          "action": {
+            "description": "What will happen on approval. share_availability: release an availability envelope to the other agents. commit_slot: accept a time on the student's behalf. raise_disclosure: answer a request for a level above the current ceiling. post_to_channel: publish a summary into a group chat (Track 3).",
+            "enum": ["share_availability", "commit_slot", "raise_disclosure", "post_to_channel"]
+          },
+          "proposal_id": { "type": "string", "pattern": "^prp_[A-Za-z0-9]{8,64}$" },
+          "discloses": {
+            "description": "The disclosure preview. The UI must render this before offering the approve control; T5 and T9 both have an acceptance criterion that depends on it.",
+            "type": "object",
+            "required": ["disclosure_level", "to", "summary"],
+            "additionalProperties": false,
+            "properties": {
+              "disclosure_level": { "enum": ["none", "free_busy", "category", "full"] },
+              "to": {
+                "description": "Exactly who would learn it. A channel_ref means a group chat, where the audience is everyone in the channel and not only the negotiation's participants.",
+                "type": "array",
+                "minItems": 1,
+                "items": { "type": "string", "pattern": "^(stu_[A-Za-z0-9]{16,64}|chn_[A-Za-z0-9]{8,64})$" }
+              },
+              "summary": {
+                "description": "The disclosure in the student's own words, built server-side from the payload that would actually be sent -- never a client's guess at it.",
+                "type": "string",
+                "maxLength": 280
+              },
+              "fields": {
+                "description": "The field paths that would be released, so the UI can show specifics rather than a reassuring sentence.",
+                "type": "array",
+                "maxItems": 40,
+                "items": { "type": "string", "maxLength": 80 }
+              }
+            }
+          },
+          "expires_at": { "type": "string", "format": "date-time" },
+          "state_version": {
+            "description": "The state this approval was raised against. Submit it back with the decision; a mismatch is a 409 rather than a silent approval of something the student never saw.",
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
     "participants": {
       "type": "array",
       "minItems": 2,
@@ -92,7 +161,25 @@
           "intent": { "enum": ["propose", "counter", "accept", "reject", "escalate"] },
           "disclosure_level": { "enum": ["none", "free_busy", "category", "full"] },
           "reason_code": { "enum": ["conflict", "outside_preferred_hours", "too_short", "no_overlap", "needs_human", "expired", "insufficient_authority"] },
-          "message_id": { "type": "string", "pattern": "^msg_[A-Za-z0-9]{16,64}$" }
+          "message_id": { "type": "string", "pattern": "^msg_[A-Za-z0-9]{16,64}$" },
+          "disclosed": {
+            "description": "What this message actually revealed, filtered for the viewer reading the transcript. A level alone does not let a student see what was said on their behalf -- 'free_busy' is a category, not a disclosure. For the viewer's own messages this is the full payload their agent sent; for another agent's it is what that agent disclosed to this viewer, and nothing it disclosed to anyone else.",
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "availability": { "$ref": "https://campusos.dev/contracts/v1/availability.schema.json" },
+              "proposed_slot": {
+                "type": "object",
+                "required": ["start", "end"],
+                "additionalProperties": false,
+                "properties": {
+                  "start": { "type": "string", "format": "date-time" },
+                  "end": { "type": "string", "format": "date-time" }
+                }
+              },
+              "summary": { "type": "string", "maxLength": 280 }
+            }
+          }
         }
       }
     },
@@ -123,6 +210,11 @@
         "required": ["outcome"],
         "properties": { "outcome": { "required": ["kind", "agreed_slot"], "properties": { "kind": { "const": "agreed" } } } }
       }
+    },
+    {
+      "$comment": "A negotiation awaiting approval must say what is awaited, for the viewer being asked. A status of awaiting_approval with nothing pending is unactionable: the UI shows a blocked negotiation and no way to unblock it.",
+      "if": { "properties": { "status": { "const": "awaiting_approval" } }, "required": ["status"] },
+      "then": { "required": ["pending_approvals"], "properties": { "pending_approvals": { "minItems": 1 } } }
     },
     {
       "$comment": "Failure is a product outcome and must explain itself.",

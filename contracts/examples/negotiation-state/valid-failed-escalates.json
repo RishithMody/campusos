@@ -7,8 +7,27 @@
   "max_rounds": 8,
   "updated_at": "2026-10-24T19:00:00Z",
   "participants": [
-    { "student_ref": "stu_7Kp2Qm9Xr4Lt8Vn3", "agent_id": "agt_Qq1Ww2Ee3Rr4Tt5Y", "state": "proposed", "disclosure_level": "free_busy" },
-    { "student_ref": "stu_Zq8Wd3Ye6Hs1Bn5K", "agent_id": "agt_Aa1Ss2Dd3Ff4Gg5H", "state": "declined", "disclosure_level": "none" }
+    {
+      "student_ref": "stu_7Kp2Qm9Xr4Lt8Vn3",
+      "agent_id": "agt_Qq1Ww2Ee3Rr4Tt5Y",
+      "state": "proposed",
+      "disclosure_level": "free_busy"
+    },
+    {
+      "student_ref": "stu_Zq8Wd3Ye6Hs1Bn5K",
+      "agent_id": "agt_Aa1Ss2Dd3Ff4Gg5H",
+      "state": "declined",
+      "disclosure_level": "none"
+    }
   ],
-  "outcome": { "kind": "max_rounds_exceeded", "requires_human_approval": true }
+  "outcome": {
+    "kind": "max_rounds_exceeded",
+    "requires_human_approval": true
+  },
+  "state_version": 7,
+  "viewer": {
+    "student_ref": "stu_7Kp2Qm9Xr4Lt8Vn3",
+    "agent_id": "agt_Qq1Ww2Ee3Rr4Tt5Y",
+    "max_disclosure_level": "free_busy"
+  }
 }

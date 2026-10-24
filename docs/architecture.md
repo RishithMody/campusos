@@ -58,7 +58,8 @@ privately (ADR 0001).
 | 5 | Group chat coordination | `groupchat/` | T9 |
 | 6 | Privacy and approval service | `backend/privacy/` | T2 |
 | 7 | Shared persistence | `backend/db/` | T2 |
-| 8 | Inference abstraction | `contracts/inference.md` → `backend/inference/` | T1 → T2, T3 |
+| 8 | Inference abstraction | `contracts/inference.md` → `backend/inference/` | T1 → **T2** |
+| 8b | Inference serving | `infra/vllm/` | **T3** |
 | 9 | Evaluation and observability | `ml/` | T4 |
 
 ---
@@ -122,6 +123,35 @@ Two design notes that are easy to get wrong later:
 Default for a new negotiation is `free_busy`. `redactions` tells the recipient *how many* items
 were withheld but never what, so "minimum disclosure" is visibly different from "nothing to hide".
 
+### The ladder is checked in three places at once
+
+A single message carries three disclosure levels, and they are only safe together:
+
+```
+scope.max_disclosure_level     what the student granted this agent   (the ceiling)
+  >= disclosure_level          what this message claims to reveal
+    >= payload.availability.disclosure_level   what the payload actually carries
+```
+
+Each must be at or below the one above it, and `agent-protocol.schema.json` enforces the whole
+chain. Checking them individually is not enough and we learned it the direct way: review of the
+first version of these contracts showed a `free_busy` message happily carrying a `full`
+availability envelope with a `therapy` label. Every part was internally consistent. The message
+was a disclosure breach.
+
+### Two identifiers, opposite lifetimes
+
+| | `contact_handle` (`cnt_`) | `student_ref` (`stu_`) |
+|---|---|---|
+| Lifetime | Durable until rotated | One negotiation |
+| Shared with | Whoever you want to be invitable by | The other participants of that negotiation |
+| Purpose | Being found | Being referred to without being correlated |
+
+This split is forced. A `stu_` cannot be the thing you hand someone to start a negotiation,
+because it is minted *by* that negotiation; and a durable handle cannot be the thing agents
+exchange, because two of them could be joined to rebuild a calendar nobody shared. So there are
+two, `GET /me` returns the first, and the server mints the second.
+
 ---
 
 ## 4. Agent authority, and its limits
@@ -151,8 +181,11 @@ Authority is explicit, bounded and expiring. It is never implied by possession o
 Three students want an hour together this week. Ana's calendar has a 2pm appointment she has told
 no one about.
 
-1. **Initiate.** Ana's client calls `POST /negotiations` with the participants, the window and
-   `max_rounds`. State: `gathering`.
+0. **Find each other.** Ben and Cal each call `GET /me` and send Ana their `cnt_` contact
+   handle, out of band. Ana never learns a `stu_` for either of them; those do not exist yet.
+1. **Initiate.** Ana's client calls `POST /negotiations` with those handles as `invitees`, the
+   window and `max_rounds`. The server resolves them, mints a **fresh `stu_` for all three**,
+   and returns the state with `viewer.student_ref` set to Ana's. State: `gathering`.
 2. **Gather.** Each student's agent builds an availability envelope from their own data — via
    Cubbie's connected Canvas and Calendar for a Skill user — reduces it to that student's
    disclosure level, and `PUT /me/availability`. **Ana's 2pm becomes `busy 14:00–16:00` with no
@@ -165,15 +198,21 @@ no one about.
    `max_rounds`, the state becomes `failed` with `outcome.kind: max_rounds_exceeded` and
    `requires_human_approval: true`. **Failure to converge is a product outcome, not a bug** — it
    surfaces to the humans who can actually resolve it.
-5. **Approve.** State `awaiting_approval`. Each student sees the proposed time *and what
-   accepting will reveal*, and answers for themselves. No agent can answer for them.
+5. **Approve.** State `awaiting_approval`, and `pending_approvals` now carries Ana's
+   `approval_id`, the action, the expiry, and `discloses` — the preview of exactly what saying
+   yes would reveal and to whom. Her client renders that *before* the approve control, then
+   `POST /approvals/{id}` with the `state_version` she was shown. If the negotiation moved on in
+   between, that is a `409` and she is asked again against the new state; she is never recorded
+   as approving something she was not shown. No agent token can answer here at all.
 6. **Confirm.** All approvals in → `converged`, with `outcome.agreed_slot`. Calendar writes happen
    only now, and on each student's own account.
-7. **Throughout:** every participant can see the transcript — what their agent said and at what
-   disclosure level. Nobody learns about Ana's appointment. They learn she was busy.
+7. **Throughout:** every participant can see the transcript — what their agent said, at what
+   level, and in `disclosed`, the payload it actually sent. Nobody learns about Ana's
+   appointment. They learn she was busy.
 
 The same flow serves all three tracks. Only the surface differs: Cubbie texts Ana, the frontend
-draws the timeline, the Discord bot posts the proposal to the group.
+draws the timeline, and the Discord bot posts `channel-summary.text` to the group — a separate,
+smaller document, because the room is a wider audience than any participant.
 
 ---
 
@@ -189,7 +228,9 @@ draws the timeline, the Discord bot posts the proposal to the group.
 | `grant` | grantor, grantee agent, negotiation, max level, expiry | Required for any cross-student read; creating one writes an audit record |
 | `negotiation` | participants, window, status, round, max_rounds | Serialises to `negotiation-state.schema.json` |
 | `message` | one protocol envelope, as sent | The audit trail |
-| `approval` | who approved what, when, and what was disclosed | Immutable |
+| `contact_handle` | durable, rotatable, shareable handle for one student | What you give someone so they can invite you. Never a `stu_`, never an email |
+| `approval` | who approved what, when, what was disclosed, and the `state_version` it was decided against | Immutable. The version binding is what makes it consent to a specific state rather than to whatever was current on arrival |
+| `channel` | platform, channel id, ceiling, per-participant confirmation | A group chat is a disclosure audience in its own right: its ceiling applies to everyone in the room, not to the member who asked |
 | `audit_log` | every cross-student read and every disclosure | Append-only. The privacy claim is only as good as this record |
 
 **Postgres** holds everything durable. **Redis** holds ephemeral session and negotiation
@@ -208,9 +249,12 @@ cannot message anyone else, so the student is the transport, by design.
 asks how agents handle conflicting constraints, what they share, and when they ask their
 students to confirm: that is §3, §4 and §5 of this document respectively.
 
-**Track 3 (T9)** — the Discord bot is the group-side view of the same negotiation. It posts
-proposals and collects confirmations; it holds no disclosure logic of its own, because B1 says it
-is just another untrusted client.
+**Track 3 (T9)** — the Discord bot is the group-side view of the same negotiation. It holds no
+disclosure logic of its own, because B1 says it is just another untrusted client. It reads
+`GET /negotiations/{id}/channel-summary` and posts the `text` verbatim; it never reads
+`NegotiationState`. The distinction is the whole of Track 3's privacy story: that document is
+filtered for *one participant*, and being allowed to see something is not permission to
+broadcast it to a room that includes people who are not in the negotiation at all.
 
 ---
 
@@ -222,3 +266,10 @@ is just another untrusted client.
 - No encryption at rest beyond what Postgres provides by default.
 - `category` leaks more than it looks: knowing someone is `personal`-busy every Tuesday at 2 is
   itself a signal. `free_busy` is the default for that reason.
+- **Everything here is specified, not yet running.** The schemas structurally reject a set of
+  over-disclosures, and that is a real second net, but the primary guarantee is the server-side
+  filter on egress and it does not exist until T2. No runtime privacy claim in this document has
+  been tested against a running service; T2 and T7 own that evidence.
+- Channel consent is collected once, at registration. A member who joins the Discord channel
+  afterwards is inside an audience they never confirmed. The ceiling is capped at `free_busy` to
+  bound the damage, which mitigates rather than solves it.

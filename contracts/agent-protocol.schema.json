@@ -36,7 +36,7 @@
     "scope": {
       "description": "The limits of this agent's authority, as granted by its student. The receiver MUST refuse an intent not listed in actions, and MUST refuse a message whose scope has expired. Authority is explicit, bounded and expiring -- never implied by possession of a token.",
       "type": "object",
-      "required": ["negotiation_id", "actions", "expires_at"],
+      "required": ["negotiation_id", "actions", "expires_at", "max_disclosure_level", "granted_by"],
       "additionalProperties": false,
       "properties": {
         "negotiation_id": { "type": "string", "pattern": "^neg_[A-Za-z0-9]{16,64}$" },
@@ -48,7 +48,7 @@
         },
         "expires_at": { "type": "string", "format": "date-time" },
         "max_disclosure_level": {
-          "description": "The ceiling the student set. The envelope's disclosure_level may be lower, never higher; the service rejects a message that exceeds it.",
+          "description": "The ceiling the student set. The envelope's disclosure_level may be lower, never higher. Required: an absent ceiling used to validate, which made 'unspecified authority' indistinguishable from 'full authority' -- the wrong default for the field that bounds disclosure.",
           "enum": ["none", "free_busy", "category", "full"]
         },
         "granted_by": {
@@ -58,7 +58,7 @@
       }
     },
     "disclosure_level": {
-      "description": "What this message is permitted to reveal. Same ladder as availability.schema.json; the two must agree, and the service enforces that the payload does not exceed it.",
+      "description": "What this message is permitted to reveal. Same ladder as availability.schema.json. At or below scope.max_disclosure_level, and at or above the nested payload.availability.disclosure_level -- both enforced structurally in allOf below, and again by the service at runtime against the authenticated grant.",
       "enum": ["none", "free_busy", "category", "full"]
     },
     "intent": {
@@ -103,9 +103,45 @@
       "then": { "properties": { "payload": { "required": ["reason_code"] } } }
     },
     {
-      "$comment": "A counter answers a specific prior message.",
-      "if": { "properties": { "intent": { "const": "counter" } }, "required": ["intent"] },
+      "$comment": "A counter or accept answers a specific prior message. Without in_reply_to, 'accept' means 'the offer on the table' -- ambiguous the moment two proposals are open, and the ambiguity resolves into someone being committed to a time they did not agree to.",
+      "if": { "properties": { "intent": { "enum": ["counter", "accept"] } }, "required": ["intent"] },
       "then": { "required": ["in_reply_to"], "properties": { "in_reply_to": { "type": "string" } } }
+    },
+    {
+      "$comment": "Accepting commits the student to a time. A standing preference set once, in advance, is not consent to this specific commitment; scope.granted_by must say the student confirmed this negotiation. This is the schema half of the rule the service also enforces.",
+      "if": { "properties": { "intent": { "const": "accept" } }, "required": ["intent"] },
+      "then": { "properties": { "scope": { "properties": { "granted_by": { "const": "per_negotiation" } } } } }
+    },
+
+    {
+      "$comment": "THE DISCLOSURE LADDER, ACROSS THE WHOLE MESSAGE. Three levels appear in one envelope -- the ceiling the student granted (scope.max_disclosure_level), what this message claims to reveal (disclosure_level), and what the availability payload actually carries (payload.availability.disclosure_level). Each must be at or below the one above it. Checking them in isolation, as this schema first did, lets a free_busy message carry a full payload with a 'therapy' label: every part is internally consistent and the whole leaks. JSON Schema cannot compare enums, so the ordering is written out. none < free_busy < category < full.",
+      "if": { "properties": { "scope": { "properties": { "max_disclosure_level": { "const": "none" } }, "required": ["max_disclosure_level"] } }, "required": ["scope"] },
+      "then": { "properties": { "disclosure_level": { "const": "none" } } }
+    },
+    {
+      "$comment": "Ceiling free_busy: the message may claim none or free_busy.",
+      "if": { "properties": { "scope": { "properties": { "max_disclosure_level": { "const": "free_busy" } }, "required": ["max_disclosure_level"] } }, "required": ["scope"] },
+      "then": { "properties": { "disclosure_level": { "enum": ["none", "free_busy"] } } }
+    },
+    {
+      "$comment": "Ceiling category: everything but full.",
+      "if": { "properties": { "scope": { "properties": { "max_disclosure_level": { "const": "category" } }, "required": ["max_disclosure_level"] } }, "required": ["scope"] },
+      "then": { "properties": { "disclosure_level": { "enum": ["none", "free_busy", "category"] } } }
+    },
+    {
+      "$comment": "Message none: the payload may not carry an availability envelope above none either.",
+      "if": { "properties": { "disclosure_level": { "const": "none" } }, "required": ["disclosure_level"] },
+      "then": { "properties": { "payload": { "properties": { "availability": { "properties": { "disclosure_level": { "const": "none" } } } } } } }
+    },
+    {
+      "$comment": "Message free_busy: the nested envelope may not be category or full.",
+      "if": { "properties": { "disclosure_level": { "const": "free_busy" } }, "required": ["disclosure_level"] },
+      "then": { "properties": { "payload": { "properties": { "availability": { "properties": { "disclosure_level": { "enum": ["none", "free_busy"] } } } } } } }
+    },
+    {
+      "$comment": "Message category: the nested envelope may not be full.",
+      "if": { "properties": { "disclosure_level": { "const": "category" } }, "required": ["disclosure_level"] },
+      "then": { "properties": { "payload": { "properties": { "availability": { "properties": { "disclosure_level": { "enum": ["none", "free_busy", "category"] } } } } } } }
     }
   ]
 }

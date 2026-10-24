@@ -35,13 +35,21 @@ tags:
   - name: negotiations
   - name: approvals
   - name: grants
+  - name: identity
+  - name: channels
 
 paths:
   /health:
     get:
       tags: [health]
       summary: Liveness probe
-      security: []
+      description: |
+        Authenticated, like every other path. CLAUDE.md section 7 states the rule without an
+        exception and this document claims the same, so an unauthenticated /health was simply
+        the two contradicting each other. Infrastructure liveness does not need this route:
+        container and load-balancer probes use the orchestrator's own healthcheck on the
+        internal port, which is never routed publicly. Granting an exception here is a human
+        decision and would need an ADR, not a default.
       responses:
         "200":
           description: Service is up
@@ -53,6 +61,82 @@ paths:
                 properties:
                   status: { type: string, enum: [ok] }
                   version: { type: string }
+
+  /me:
+    get:
+      tags: [identity]
+      summary: The calling student's own account view
+      description: |
+        Returns the caller's durable contact handle: the identifier they share out of band
+        (a link, a QR code, a message) so somebody can invite them. It is deliberately NOT a
+        `stu_` reference. A `stu_` is minted per negotiation precisely so that two recipients
+        cannot join their records together, which means it cannot also be the thing you give
+        someone in order to start the first negotiation. The two identifiers have opposite
+        lifetimes and this endpoint is where that distinction becomes usable.
+      responses:
+        "200":
+          description: The caller
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [contact_handle]
+                additionalProperties: false
+                properties:
+                  contact_handle: { type: string, pattern: "^cnt_[A-Za-z0-9]{16,64}$" }
+                  display_name:
+                    type: string
+                    maxLength: 40
+                    description: Chosen by the student. Never derived from an email or legal name.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [identity]
+      summary: Rotate the caller's contact handle
+      description: |
+        Invalidates the old handle. The escape hatch for a handle that has been shared more
+        widely than intended; open negotiations keep their own pseudonyms and are unaffected.
+      responses:
+        "200":
+          description: Rotated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [contact_handle]
+                properties:
+                  contact_handle: { type: string, pattern: "^cnt_[A-Za-z0-9]{16,64}$" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /me/chat:
+    post:
+      tags: [identity]
+      summary: Talk to your own agent, streamed
+      description: |
+        A student's conversation with the agent that represents them. This never crosses to
+        another student: it is the one surface where `note_for_own_student` content is legible,
+        and the agent may speak freely here about its own student's calendar.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              additionalProperties: false
+              properties:
+                message: { type: string, maxLength: 2000 }
+                negotiation_id:
+                  type: string
+                  pattern: "^neg_[A-Za-z0-9]{16,64}$"
+                  description: Optional context, so "why did you say no?" has an antecedent.
+      responses:
+        "200":
+          description: text/event-stream of token deltas, then a terminal event
+          content:
+            text/event-stream:
+              schema: { type: string }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
 
   /me/availability:
     put:
@@ -74,6 +158,64 @@ paths:
         "422": { $ref: "#/components/responses/DisclosureViolation" }
 
   /negotiations:
+    get:
+      tags: [negotiations]
+      summary: List the caller's negotiations
+      description: |
+        The dashboard query. `status=converged` is the student's commitments; the default is
+        everything they participate in, newest first. Each entry is a summary, not a full
+        state document, and is filtered for this caller like everything else.
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [gathering, negotiating, awaiting_approval, converged, failed, expired, cancelled]
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        "200":
+          description: Summaries, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [negotiations]
+                additionalProperties: false
+                properties:
+                  negotiations:
+                    type: array
+                    items:
+                      type: object
+                      required: [negotiation_id, status, state_version, updated_at, awaiting_me]
+                      additionalProperties: false
+                      properties:
+                        negotiation_id: { type: string, pattern: "^neg_[A-Za-z0-9]{16,64}$" }
+                        status:
+                          type: string
+                          enum: [gathering, negotiating, awaiting_approval, converged, failed, expired, cancelled]
+                        state_version: { type: integer, minimum: 0 }
+                        updated_at: { type: string, format: date-time }
+                        awaiting_me:
+                          type: boolean
+                          description: True when this caller has a pending approval. Lets the dashboard show the student what needs them without fetching every negotiation.
+                        agreed_slot:
+                          type: object
+                          required: [start, end]
+                          additionalProperties: false
+                          properties:
+                            start: { type: string, format: date-time }
+                            end: { type: string, format: date-time }
+                        title:
+                          type: string
+                          maxLength: 80
+                          description: Set by the creator. Shared with participants, so it is as public as the negotiation itself.
+        "401": { $ref: "#/components/responses/Unauthorized" }
     post:
       tags: [negotiations]
       summary: Start a negotiation
@@ -83,14 +225,22 @@ paths:
           application/json:
             schema:
               type: object
-              required: [participants, window, max_rounds]
+              required: [invitees, window, max_rounds]
               additionalProperties: false
               properties:
-                participants:
+                invitees:
                   type: array
-                  minItems: 2
-                  maxItems: 12
-                  items: { type: string, pattern: "^stu_[A-Za-z0-9]{16,64}$" }
+                  minItems: 1
+                  maxItems: 11
+                  description: |
+                    Durable contact handles from `GET /me`, obtained out of band. The caller is
+                    always a participant and is not listed here. The server resolves each handle
+                    to an account, mints a fresh per-negotiation `stu_` pseudonym for every
+                    participant including the caller, and returns them in the state document.
+                    Clients never mint or reuse a `stu_`: reusing one across negotiations is
+                    exactly the correlation the pseudonyms exist to prevent.
+                  items: { type: string, pattern: "^cnt_[A-Za-z0-9]{16,64}$" }
+                title: { type: string, maxLength: 80 }
                 window:
                   type: object
                   required: [start, end]
@@ -188,18 +338,35 @@ paths:
       tags: [approvals]
       summary: The student confirms or declines on their own behalf
       description: |
-        An agent can never supply this. Anything that books, sends or commits passes through here
-        first, and the response states exactly what will be revealed if the student accepts.
+        Anything that books, sends or commits passes through here first.
+
+        **What will be revealed is stated before the decision, not after.** The pending approval
+        — its id, the action, the disclosure preview and its expiry — is carried in the
+        `pending_approvals` array of the negotiation state, which the client reads or streams.
+        Describing the consequences only in this endpoint's response would be asking the student
+        to consent to something they have not been shown.
+
+        **A human token only.** This is the one place in the API where an agent credential is
+        refused outright: the entire approval model rests on a person being on the other end, so
+        a token minted for an agent gets a 403 here however broad its grant.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [decision]
+              required: [decision, state_version]
               additionalProperties: false
               properties:
                 decision: { type: string, enum: [approve, decline] }
+                state_version:
+                  type: integer
+                  minimum: 0
+                  description: |
+                    Copied from the `pending_approvals` entry the student was shown. If the
+                    negotiation has moved on since, this is a 409 and the client re-reads and
+                    re-asks. Without it, approving means approving whatever happens to be
+                    current when the request lands, which is not what the student consented to.
       responses:
         "200":
           description: Recorded
@@ -210,10 +377,94 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
-          description: Already decided
+          description: |
+            Already decided, expired, or `state_version` is stale. The client re-reads the
+            negotiation and asks the student again against the current state.
           content:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
+
+  /channels:
+    post:
+      tags: [channels]
+      summary: Register a group chat as a disclosure audience
+      description: |
+        Track 3 posts into a Discord channel, where the audience is **everyone in the channel**,
+        including people who are not in the negotiation. That makes the channel a disclosure
+        target in its own right, and it has to be one the backend knows about — otherwise the
+        only component that could apply the channel's limit is the bot, and the bot is an
+        untrusted client (boundary B1).
+
+        Registering binds a channel to a ceiling. Every participant who is also a channel member
+        confirms it; the ceiling then applies to anything posted there, regardless of what any
+        individual member is separately entitled to read. Membership changes do not widen it, and
+        a participant who is not a channel member is never named in it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [platform, platform_channel_id, max_disclosure_level]
+              additionalProperties: false
+              properties:
+                platform: { type: string, enum: [discord] }
+                platform_channel_id: { type: string, maxLength: 64 }
+                max_disclosure_level:
+                  type: string
+                  enum: [none, free_busy]
+                  description: |
+                    Capped at free_busy by the contract, not by convention. `category` and `full`
+                    describe why a student is unavailable, and a group chat is the wrong audience
+                    for that at any consent level a bot could plausibly collect.
+      responses:
+        "201":
+          description: Registered, pending participant confirmation
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [channel_id, confirmed]
+                additionalProperties: false
+                properties:
+                  channel_id: { type: string, pattern: "^chn_[A-Za-z0-9]{8,64}$" }
+                  confirmed:
+                    type: boolean
+                    description: False until every participating channel member has confirmed. Until then the summary endpoint returns 403.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /negotiations/{negotiation_id}/channel-summary:
+    parameters:
+      - name: negotiation_id
+        in: path
+        required: true
+        schema: { type: string, pattern: "^neg_[A-Za-z0-9]{16,64}$" }
+      - name: channel_id
+        in: query
+        required: true
+        schema: { type: string, pattern: "^chn_[A-Za-z0-9]{8,64}$" }
+    get:
+      tags: [channels]
+      summary: The channel-safe view of a negotiation
+      description: |
+        What the Track 3 bot posts, computed server-side for the channel's audience. The bot
+        renders this and nothing else; it never reads `NegotiationState` and never decides what
+        is safe to say. That is the whole point — a participant-filtered document is not
+        authorisation to broadcast it to a room, and the two had been conflated.
+      responses:
+        "200":
+          description: Safe to post in the channel
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChannelSummary" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: Channel not registered, not confirmed by all participating members, or the bot is not bound to it.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /grants:
     post:
@@ -244,10 +495,35 @@ paths:
                 type: object
                 required: [grant_id, expires_at]
                 properties:
-                  grant_id: { type: string }
+                  grant_id: { type: string, pattern: "^grt_[A-Za-z0-9]{8,64}$" }
                   expires_at: { type: string, format: date-time }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+
+  /grants/{grant_id}:
+    parameters:
+      - name: grant_id
+        in: path
+        required: true
+        schema: { type: string, pattern: "^grt_[A-Za-z0-9]{8,64}$" }
+    delete:
+      tags: [grants]
+      summary: Revoke a grant before it expires
+      description: |
+        Only the student who issued it. A grant that can be given and not taken back is not a
+        grant, it is a disclosure with a timer, and "I changed my mind" is the most ordinary
+        privacy action there is.
+
+        Revocation takes effect immediately and applies to **open streams as well as new
+        requests**: any `/stream` subscription relying on this grant is dropped, and whatever
+        was already delivered stays delivered. Saying so here matters because the natural
+        implementation — checking the grant when the stream opens — silently keeps leaking to a
+        long-lived connection after the student has revoked it.
+      responses:
+        "204": { description: Revoked; open streams relying on it are dropped }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
 components:
   securitySchemes:
@@ -266,6 +542,48 @@ components:
       $ref: "https://campusos.dev/contracts/v1/agent-protocol.schema.json"
     NegotiationState:
       $ref: "https://campusos.dev/contracts/v1/negotiation-state.schema.json"
+    ChannelSummary:
+      type: object
+      description: |
+        The only shape the Track 3 bot ever posts. Small on purpose — it is written for a room,
+        not for a participant. There is no availability envelope here at any level: a channel
+        never needs to know when anyone is busy, only whether a time was found.
+      required: [negotiation_id, status, round, max_rounds, text]
+      additionalProperties: false
+      properties:
+        negotiation_id: { type: string, pattern: "^neg_[A-Za-z0-9]{16,64}$" }
+        status:
+          type: string
+          enum: [gathering, negotiating, awaiting_approval, converged, failed, expired, cancelled]
+        round: { type: integer, minimum: 0 }
+        max_rounds: { type: integer, minimum: 1, maximum: 20 }
+        text:
+          type: string
+          maxLength: 280
+          description: |
+            The post, composed server-side. The bot sends this verbatim. It must not rewrite or
+            embellish it: paraphrasing a `reason_code` back into prose is the leak the closed
+            vocabulary exists to prevent, and a group chat is the worst place to discover that.
+        agreed_slot:
+          type: object
+          description: Present only once converged and approved. A time, never a reason.
+          required: [start, end]
+          additionalProperties: false
+          properties:
+            start: { type: string, format: date-time }
+            end: { type: string, format: date-time }
+        reason_code:
+          type: string
+          enum: [conflict, outside_preferred_hours, too_short, no_overlap, needs_human, expired, insufficient_authority]
+        named_participants:
+          type: array
+          maxItems: 12
+          description: |
+            Display names only, and only for participants who are channel members and consented
+            to be named there. Someone in the negotiation but not in the channel is never named,
+            and never implied by a count.
+          items: { type: string, maxLength: 40 }
+
     Problem:
       type: object
       description: RFC 9457 problem details. Never contains private data or a secret.
