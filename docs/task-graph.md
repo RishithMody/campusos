@@ -86,9 +86,10 @@ the Track 2 agent-to-agent message, and the Track 3 group-chat payload. The back
 | T4 | ML evaluation baseline | 2 | ML Engineer | Claude Code | T1 | `READY` |
 | T5 | Frontend: negotiation visualisation | 2 | Frontend Engineer | Codex | T1 + stable `contracts/` | `BLOCKED` (queued) |
 | T6 | Optional LoRA fine-tuning | 2 | ML Engineer | Claude Code | T3, T4 | `BLOCKED` |
-| T7 | End-to-end integration | 2 | QA / Orchestrator | Codex + Claude Code | T2, T3, T5 | `BLOCKED` |
+| T7a | **Live verification: real Discord, PostgreSQL, Redis** | 2·3 | QA / Security Reviewer | Codex | T2, T9 | `READY` |
+| T7 | End-to-end integration (full stack) | 2 | QA / Orchestrator | Codex + Claude Code | T2, T3, T5, T9 | `BLOCKED` |
 | T8 | Final demo & all-track submission check | all | Orchestrator | Claude Code | T0b, T10, T11 | `BLOCKED` |
-| T9 | **Track 3 group chat assistant (Discord)** | 3 | Frontend Engineer | Codex | T1, T2 | `REVIEW` |
+| T9 | **Track 3 group chat assistant (Discord)** | 3 | Frontend Engineer | Codex | T1, T2 | `DONE` |
 | T10 | **Track 2 submission package** | 2 | Orchestrator | Claude Code | T0b, T7 | `BLOCKED` |
 | T11 | **Track 3 submission package** | 3 | Orchestrator | Claude Code | T0b, T9 | `BLOCKED` |
 
@@ -482,12 +483,89 @@ token in `docs/agents/assignments/T6.md` before a single training step runs.
 
 ---
 
+## T7a — Live verification: real Discord, PostgreSQL, Redis
+
+| | |
+|---|---|
+| **Agent** | QA / Security Reviewer (Codex) |
+| **Depends on** | T2 ✅, T9 ✅ |
+| **Status** | `READY` |
+| **Branch / worktree** | `task/T7a-live-verify` → `~/campusos-worktrees/T7a-live-verify` |
+| **Owns** | `tests/live/`, `docker-compose.yml` |
+| **GPU approval** | `NONE` — and none is needed. No vLLM, no cluster, no model |
+
+**Split out of T7 on 2026-10-24** because it does not need what T7 needs. The full-stack
+integration waits on T3 (vLLM) and T5 (the UI); **live verification of Discord, PostgreSQL and
+Redis waits on nothing** — T2 and T9 are merged. Parking the live checks behind a GPU task
+would have left the riskiest unknowns untouched for longest.
+
+### What is actually unverified right now
+
+Both T2 and T9 passed review, and both said plainly what they had not done. This is that list:
+
+| Claim | Verified as | Still unknown |
+|---|---|---|
+| Discord permissions, intents, channel registration | unit tests against **mocked** responses | **No real account, server or channel has ever been contacted** |
+| Redis behaviour, TTLs, pub/sub, fail-closed on outage | **fakeredis** | real Redis semantics, eviction, reconnect |
+| PostgreSQL migration + concurrency | **real cluster**, 12 locked threads ✅ | behaviour under a server restart, connection loss mid-transaction |
+| Channel summary safety | 792 hostile payloads refused ✅ | nothing — this one is solid |
+
+### Acceptance criteria
+
+- [ ] `docker-compose.yml` brings up PostgreSQL and Redis from one documented command
+- [ ] The backend suite passes against **real Redis**, not fakeredis — and the difference is
+      recorded if any test needed changing
+- [ ] **The bot connects to a real Discord server**, registers its slash commands, and
+      `/schedule` and `/watch` work in a real text channel
+- [ ] The Guild Members intent is confirmed enabled, and the permission calculation is checked
+      against what Discord actually reports — not against the mock
+- [ ] A full consent cycle in a real channel: bind → every participant approves → a summary is
+      posted → one participant withdraws → **posting stops**
+- [ ] A declined binding and a pending binding are **indistinguishable** to the bot in the live
+      system, as they are in the tests
+- [ ] Rate limiting observed and handled: the bot does not crash or double-post under it
+- [ ] PostgreSQL killed mid-negotiation: the system degrades without leaking and without
+      corrupting durable state
+- [ ] Redis killed mid-negotiation: mutations fail closed, streams recover
+- [ ] **Every message the bot posted in the real channel is one of the eight frozen
+      sentences.** Paste the actual channel transcript into the handoff
+- [ ] No credential in the repo; Discord token from the environment only
+
+### Required tests
+
+- `tests/live/` — marked so they **skip by default** and never run in CI without real services,
+  the way `test_postgres.py` already does. A live test that silently no-ops is worse than none
+- The existing backend and groupchat suites, re-run against real services
+- The resilience cases above, each recorded with real output
+
+### Context the agent cannot infer
+
+- The live checklist is already written: `groupchat/README.md`.
+- T9's integration deviation, which is **not** a bug to fix: the bot does not poll
+  `channel-bindings`, because T2's GET requires participant authorization and refuses bot
+  credentials. The bot relies on the `channel-summary` 403 gate instead. Confirm the live
+  system behaves the same way.
+- **Same-size audience substitution is a known, documented gap** in the frozen contract: a room
+  that swaps one member for another keeps its count and does not trigger re-consent. Do not
+  "fix" it here — it needs a contract change and the Orchestrator.
+- A signed human-kind token claim is **not** proof of a human ceremony unless the issuer
+  enforces it. Probe that boundary.
+
+### Blocked on, before anything touches Discord
+
+| | Needed | Why |
+|---|---|---|
+| **Discord bot token + a test server** | from the owner | Nothing live can run without one. Never commit it |
+| **Owner approval to connect** | explicit | Connecting to Discord is an outward-facing action |
+
+---
+
 ## T7 — End-to-end integration
 
 | | |
 |---|---|
 | **Agent** | QA / Security Reviewer (Codex) + Orchestrator (Claude Code) |
-| **Depends on** | T2, T3, T5 |
+| **Depends on** | T2 ✅, T9 ✅, T3, T5 |
 | **Status** | `BLOCKED` |
 | **Branch / worktree** | `task/T7-integration` → `~/campusos-worktrees/T7-integration` |
 | **Owns** | `tests/integration/`, `tests/e2e/`, `docker-compose.yml` |

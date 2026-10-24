@@ -57,7 +57,7 @@ t "status"                        0 $A status
 t "unknown command is rejected"   1 $A bogus-command
 
 echo "Guards refuse what they must"
-WT_BEFORE="$(git worktree list | wc -l)"
+WT_BEFORE="$(git worktree list | wc -l)"   # also re-checked at the end of the suite
 t "create: unknown role"          1 $A create nosuchrole
 t "create: unknown task"          1 $A create ml T99
 # These four exercise guards that, if the guard is broken, DO something: create a
@@ -105,6 +105,7 @@ t "create: T11 is a known task"   1 $A create orchestrator T11
 t "T9 is not reported unknown"    1 bash -c "$A create frontend T9 2>&1 | grep -q 'unknown task'"
 t "T10 is not reported unknown"   1 bash -c "$A create orchestrator T10 2>&1 | grep -q 'unknown task'"
 t "T11 is not reported unknown"   1 bash -c "$A create orchestrator T11 2>&1 | grep -q 'unknown task'"
+t "T7a is a known task"           0 bash -c "! $A review T7a 2>&1 | grep -q 'unknown role or task'"
 t "T0c is a known task"           0 bash -c "$A create orchestrator T0c 2>&1 | grep -qv 'unknown task'"
 t "T0c refused while BLOCKED"     1 bash -c "$A create orchestrator T0c"
 
@@ -346,6 +347,11 @@ else
   [ -d "$wt" ] && git -C "$wt" clean -qfd
   t "cleanup: succeeds when clean"    0 $A cleanup T1
 fi
+
+# Nothing in this suite may create or destroy a worktree. Checked here as well as in the
+# guards block, because a test added later lands after that check and not before it --
+# which is exactly how a stray T7a worktree got created.
+t "suite created no worktrees" 0 bash -c "[ \"$(git worktree list | wc -l)\" = \"$WT_BEFORE\" ]"
 
 printf '\n%s passed, %s failed, %s skipped\n' "$pass" "$fail" "$skipped"
 [ "$fail" -eq 0 ] || exit 1
