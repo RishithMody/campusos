@@ -35,25 +35,26 @@ kept **validated and submittable on short notice**.
 | Slot | Agent | Task | CLI | Worktree | State |
 |---|---|---|---|---|---|
 | — | Orchestrator | T0 | claude | `~/campusos` (primary) | **`DONE`** — signed off 2026-10-24 |
+| — | Backend Engineer | T2 | codex | — | **`DONE`** — merged 2026-10-24, worktree cleaned up |
 | — | Orchestrator | T0b | claude | `~/campusos-worktrees/T0b-cubbie-skill` | **`REVIEW`** — Skill + public package ready for owner acceptance |
 | — | Orchestrator | T0c | claude | — | **blocked on D2** — publish + submit |
 | — | Orchestrator | T1 | claude | `~/campusos-worktrees/T1-architecture` | **`REVIEW_WAIVED`** — merged to `main`. Not a `PASS` |
-| 1 | Backend Engineer | T2 | codex | `~/campusos-worktrees/T2-backend` | **`READY`** — worktree created |
+| 1 | Frontend Engineer | T9 | codex | `~/campusos-worktrees/T9-groupchat` | **`READY`** — worktree created, backend merged |
 | 2 | GPU Infra Engineer | T3 | codex | `~/campusos-worktrees/T3-gpu` | `READY` — **deprioritised below Track 1**, not started |
 | 3 | ML Engineer | T4 | claude | `~/campusos-worktrees/T4-ml-baseline` | `READY` — **deprioritised below Track 1**, not started |
 | — | Frontend Engineer | T5 → T9 | codex | — | waiting on stable `contracts/` |
 | — | QA / Security Reviewer | checkpoints | codex / claude | — | idle (no implementation slot) |
 
-**Slots: 3 / 3 reserved, 1 agent actually running.**
+**Slots: 3 / 3 reserved, 0 agents running right now.**
 
-`./scripts/agents.sh status` says `3/3` because it counts *worktrees*, and T2, T3 and T4 all
-have one. Only **T2** has an agent in it. T3 and T4 are provisioned but deliberately not
-started — the owner put finishing Track 1 ahead of them on 2026-10-24. T0b is Orchestrator
-work and consumes no slot either way.
+`./scripts/agents.sh status` counts *worktrees*: T9, T3 and T4 each have one. **T9 is the
+one to start.** T3 and T4 are provisioned but parked behind Track 1 by the owner.
 
-So the limit is reached on paper and there is spare capacity in practice. If T5 or T9 needs to
-start before T3/T4 do, free a slot with `./scripts/agents.sh cleanup T3` rather than
-overriding the limit — an unused worktree holding a slot is the thing to remove.
+T2 is merged and its worktree was cleaned up, which is what freed the slot T9 now holds — the
+honest way to make room, rather than `CAMPUSOS_ALLOW_OVER_LIMIT`. If T5 needs to start before
+T3/T4 do, clean up an unused worktree the same way.
+
+T0b is Orchestrator work and consumes no slot.
 
 ## Immediate next action
 
@@ -85,7 +86,8 @@ T3 and T4 stay parked until Track 1 is in. T2 keeps running.
 | Task | Waiting on | Who unblocks it |
 |---|---|---|
 | T0b | **D2** — team roster and entry owner | **Human** |
-| T5, T9 | **a free implementation slot** — 3 / 3 in use | whichever of T2/T3/T4 finishes |
+| T5 | queued behind T9 by owner priority; its dependencies are satisfied | Orchestrator |
+| T7 | T2 ✅, T3, T5 | T3 and T5 |
 | T6 | T3, T4 **and** a human-signed GPU approval token | Human |
 | T7 | T2, T3, T5 | the three implementation agents |
 | T10 | T0b (eligibility), T7 | Orchestrator |
