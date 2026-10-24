@@ -79,10 +79,10 @@ the Track 2 agent-to-agent message, and the Track 3 group-chat payload. The back
 |---|---|---|---|---|---|---|
 | T0 | Verify hackathon requirements | all | Orchestrator | Claude Code | — | `DONE` |
 | T0b | **Track 1 Cubbie Skill + submission** | 1 | Orchestrator | Claude Code | T0 + **D2** | `BLOCKED` (D2) |
-| T1 | Architecture & shared contracts | all | Orchestrator | Claude Code | — | `REVIEW` |
-| T2 | Backend implementation | 1·2·3 | Backend Engineer | Codex | T1 | `BLOCKED` |
-| T3 | GPU inference setup (vLLM) | 2·3 | GPU Infra Engineer | Codex | T1 | `BLOCKED` |
-| T4 | ML evaluation baseline | 2 | ML Engineer | Claude Code | T1 | `BLOCKED` |
+| T1 | Architecture & shared contracts | all | Orchestrator | Claude Code | — | `REVIEW_WAIVED` |
+| T2 | Backend implementation | 1·2·3 | Backend Engineer | Codex | T1 | `READY` |
+| T3 | GPU inference setup (vLLM) | 2·3 | GPU Infra Engineer | Codex | T1 | `READY` |
+| T4 | ML evaluation baseline | 2 | ML Engineer | Claude Code | T1 | `READY` |
 | T5 | Frontend: negotiation visualisation | 2 | Frontend Engineer | Codex | T1 + stable `contracts/` | `BLOCKED` |
 | T6 | Optional LoRA fine-tuning | 2 | ML Engineer | Claude Code | T3, T4 | `BLOCKED` |
 | T7 | End-to-end integration | 2 | QA / Orchestrator | Codex + Claude Code | T2, T3, T5 | `BLOCKED` |
@@ -90,6 +90,13 @@ the Track 2 agent-to-agent message, and the Track 3 group-chat payload. The back
 | T9 | **Track 3 group chat assistant (Discord)** | 3 | Frontend Engineer | Codex | T1, T2 | `BLOCKED` |
 | T10 | **Track 2 submission package** | 2 | Orchestrator | Claude Code | T0b, T7 | `BLOCKED` |
 | T11 | **Track 3 submission package** | 3 | Orchestrator | Claude Code | T0b, T9 | `BLOCKED` |
+
+**`REVIEW_WAIVED` satisfies a dependency exactly as `DONE` does.** It means the work is
+merged and the tests pass, but the independent review in CLAUDE.md §6 was **not completed** —
+the owner accepted the risk and authorised the merge. It is deliberately not written as `DONE`,
+and never as `PASS`: no reviewer approved T1, and an agent reading this table months from now
+should be able to see that. The record is `docs/agents/reviews/T1/WAIVER.md`, beside the two
+Codex reports that *were* completed.
 
 **T0b is the highest-priority task in the project.** It is small, it is the only mandatory
 deliverable, and it unlocks the other two tracks. Do not let the product build delay it.
@@ -106,6 +113,17 @@ deliverable, and it unlocks the other two tracks. Do not let the product build d
 | **Owns** | `docs/hackathon-requirements.md` |
 
 **Output:** `docs/hackathon-requirements.md`, 10 sources, every claim dated and cited.
+
+**Merged 2026-10-24 with `--no-ff`. `contracts/` is now FROZEN.** Changing a published contract
+breaks agents mid-flight: write the proposal in your handoff, set your task to `REVIEW`, and
+stop. The Orchestrator versions the change and notifies dependents.
+
+**The third review was waived, not passed.** Two independent Codex reviews were completed and
+all thirteen findings addressed and verified; the owner waived the third under time pressure
+and explicitly accepted the remaining risk. The two reports and the waiver are preserved in
+`docs/agents/reviews/T1/`. **Read them before building against these contracts** — between
+them they explain why the disclosure ladder is checked on every carrier, why approvals bind to
+a `state_version`, and why Track 3 consent is four steps.
 
 ### Acceptance criteria
 - [x] Deadline, deliverables, Cubbie Skill format, judging, team rules, repo visibility, and
@@ -178,8 +196,9 @@ pivot away from solo study planning, which collides with Cubbie's built-in `stud
 |---|---|
 | **Agent** | Orchestrator (Claude Code) |
 | **Depends on** | — |
-| **Status** | `REVIEW` — attempt 3, awaiting re-review and the human's merge |
-| **Repair attempts** | **2 / 3 used — one left** |
+| **Status** | **`REVIEW_WAIVED`** — merged to `main` 2026-10-24. Not `PASS`: see below |
+| **Repair attempts** | 2 / 3 used; the third review was waived, not failed |
+| **Waiver** | `docs/agents/reviews/T1/WAIVER.md` — owner-accepted risk |
 | **Branch / worktree** | `task/T1-architecture` → `~/campusos-worktrees/T1-architecture` |
 | **Owns** | `docs/architecture.md`, `contracts/`, `docs/adr/` |
 | **Handoff** | `docs/agents/handoffs/T1-1.md` (on the branch) |
