@@ -277,6 +277,23 @@ JSON
 t "matrix: unswept carrier caught"        1 $PYBIN scripts/ci/check_disclosure_matrix.py --contracts "$mdir"
 rm -rf "$(dirname "$mdir")"
 
+echo "Skill privacy audit"
+# The Skill folder leaves a private repo for a public one, and emits text a student
+# pastes into a group chat. Both are one-way doors.
+if [ -d skills/squad-sync ]; then
+  t "audit: the real Skill is clean"  0 $PYBIN scripts/ci/audit_skill_privacy.py --skill skills/squad-sync
+  adir="$(mktemp -d)/squad-sync"; mkdir -p "$adir"
+  cp -R skills/squad-sync/. "$adir/"
+  printf '\n<!-- reach me at someone@example.edu -->\n' >> "$adir/SKILL.md"
+  t "audit: catches a leaked email"   1 $PYBIN scripts/ci/audit_skill_privacy.py --skill "$adir"
+  cp -R skills/squad-sync/. "$adir/"
+  printf '\nimport socket\n' >> "$adir/scripts/squad_sync.py"
+  t "audit: catches a network import" 1 $PYBIN scripts/ci/audit_skill_privacy.py --skill "$adir"
+  rm -rf "$(dirname "$adir")"
+else
+  skip "audit: the real Skill is clean" "skills/squad-sync is not on this branch yet"
+fi
+
 echo "Secret scan actually catches secrets"
 tmp="$(mktemp -d)"
 # The fake credentials are assembled at runtime from harmless halves, so this test file
