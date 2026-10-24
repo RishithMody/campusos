@@ -67,6 +67,43 @@ warnings: list[str] = []
 checked = 0
 
 
+def _reexec_under_venv() -> None:
+    """Re-run under the repo venv when the current interpreter lacks the dependencies.
+
+    The shebang resolves to the system python3, which has none of them. Two consecutive
+    reviewers ran the documented command, got five errors, and had to work out that the
+    real interpreter lives in the primary worktree -- the dependency check was doing its
+    job and the ergonomics were still wrong. If a usable venv exists, use it; if not,
+    carry on and fail loudly as before. A guard variable stops this recursing.
+    """
+    import os
+
+    if os.environ.get("CAMPUSOS_REEXEC"):
+        return
+    try:
+        import jsonschema  # noqa: F401
+        import yaml  # noqa: F401
+        return
+    except ImportError:
+        pass
+    primary = ROOT
+    try:
+        import subprocess
+
+        common = subprocess.run(
+            ["git", "-C", str(ROOT), "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            capture_output=True, text=True, check=True,
+        ).stdout.strip()
+        if common:
+            primary = Path(common).parent
+    except Exception:  # noqa: BLE001 - not a git checkout, or no git; fall back to ROOT
+        pass
+    for candidate in (ROOT / ".venv/bin/python", primary / ".venv/bin/python"):
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            os.environ["CAMPUSOS_REEXEC"] = "1"
+            os.execv(str(candidate), [str(candidate), str(Path(__file__).resolve()), *sys.argv[1:]])
+
+
 def rel(path: Path) -> str:
     try:
         return str(path.relative_to(ROOT))
@@ -319,6 +356,7 @@ def check_fixtures(schema_path: Path, schema: dict, registry=None) -> None:
 
 
 def main() -> int:
+    _reexec_under_venv()
     global CONTRACTS, EXAMPLES
     strict = "--strict" in sys.argv
     if "--contracts" in sys.argv:
