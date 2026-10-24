@@ -1,0 +1,1 @@
+"""CampusOS authenticated coordination service."""
