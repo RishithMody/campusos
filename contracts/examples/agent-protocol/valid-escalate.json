@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0",
+  "message_id": "msg_H8g7F6e5D4c3B2a1",
+  "trace_id": "trc_Z9y8X7w6V5u4T3s2",
+  "issued_at": "2026-10-24T18:20:00Z",
+  "sender": {
+    "agent_id": "agt_Qq1Ww2Ee3Rr4Tt5Y",
+    "agent_version": "1.0.0"
+  },
+  "represented_student": {
+    "student_ref": "stu_7Kp2Qm9Xr4Lt8Vn3"
+  },
+  "scope": {
+    "negotiation_id": "neg_Nn1Mm2Bb3Vv4Cc5X",
+    "actions": [
+      "escalate"
+    ],
+    "expires_at": "2026-10-25T18:00:00Z",
+    "granted_by": "standing",
+    "max_disclosure_level": "none"
+  },
+  "disclosure_level": "none",
+  "intent": "escalate",
+  "payload": {
+    "reason_code": "no_overlap",
+    "note_for_own_student": "No shared hour this week. Want me to look at next week?"
+  }
+}

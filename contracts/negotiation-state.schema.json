@@ -1,0 +1,264 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://campusos.dev/contracts/v1/negotiation-state.schema.json",
+  "title": "Negotiation state (v1)",
+  "description": "The LangGraph state for one negotiation, and the thing the frontend renders live. This is a product surface, not an implementation detail: T5 draws it and T9 summarises it into a group chat, so it is designed to be read by a person, serialised, and versioned. Everything in it is already disclosure-filtered -- the state a given viewer receives never contains more than that viewer is entitled to see.",
+  "type": "object",
+  "required": ["schema_version", "negotiation_id", "trace_id", "state_version", "status", "round", "max_rounds", "participants", "viewer", "updated_at"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "negotiation_id": { "type": "string", "pattern": "^neg_[A-Za-z0-9]{16,64}$" },
+    "trace_id": { "type": "string", "pattern": "^trc_[A-Za-z0-9]{16,64}$" },
+    "status": {
+      "description": "gathering: collecting availability. negotiating: agents exchanging proposals. awaiting_approval: a time is on the table and the humans must confirm. converged: agreed and confirmed. failed: no agreement within max_rounds. expired: ran past its deadline. cancelled: a participant withdrew. failed and expired are normal product outcomes that the UI must show honestly, not errors to hide.",
+      "enum": ["gathering", "negotiating", "awaiting_approval", "converged", "failed", "expired", "cancelled"]
+    },
+    "round": { "type": "integer", "minimum": 0 },
+    "max_rounds": {
+      "description": "The bound on the negotiation loop. Required, and enforced: an unbounded agent loop is both a cost risk and a way for a disagreement to never surface to the humans who could resolve it.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 20
+    },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "state_version": {
+      "description": "Monotonic counter, incremented on every change. A human approving something must be approving the state they were shown: the decision carries the version it was made against, and the service rejects it as stale if the negotiation has moved on. Without this, 'approve' means 'approve whatever is current by the time this arrives'.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "viewer": {
+      "description": "Who the caller is inside this negotiation. Every other identifier here is a per-negotiation pseudonym, so without this a participant cannot pick itself out of the participants array -- it has no way to learn its own stu_ ref, which it needs to submit availability and to read its own approvals. Server-set; echoing a client-supplied value here would make the whole identity model client-controlled.",
+      "type": "object",
+      "required": ["student_ref", "agent_id", "max_disclosure_level", "awaiting_me"],
+      "additionalProperties": false,
+      "properties": {
+        "student_ref": { "type": "string", "pattern": "^stu_[A-Za-z0-9]{16,64}$" },
+        "agent_id": { "type": "string", "pattern": "^agt_[A-Za-z0-9]{16,64}$" },
+        "max_disclosure_level": {
+          "description": "The ceiling in force for this viewer in this negotiation. The UI uses it to show the student what their agent is allowed to reveal, before it reveals it.",
+          "enum": ["none", "free_busy", "category", "full"]
+        },
+        "awaiting_me": {
+          "description": "Whether THIS viewer still has something to decide. Distinct from status: `awaiting_approval` is a property of the negotiation, `awaiting_me` is a property of the reader. Once Ana approves and Ben has not, the negotiation is still awaiting_approval and Ana is done -- the two must be separable, or Ana's own client cannot render the state it just created by approving.",
+          "type": "boolean"
+        },
+        "state": {
+          "description": "This viewer's own participation state, mirrored from participants[] so a client does not have to find itself in the array to know where it stands.",
+          "enum": ["invited", "shared_availability", "proposed", "accepted", "declined", "timed_out"]
+        }
+      }
+    },
+    "pending_approvals": {
+      "description": "What this viewer is being asked to decide, and exactly what saying yes would reveal. Only ever the caller's own approvals -- one participant never sees another's pending decisions. This exists because informed consent has to come before the decision: an approval endpoint that describes the consequences only in its response is asking the student to agree to something they have not been shown.",
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "required": ["approval_id", "action", "discloses", "expires_at", "state_version"],
+        "additionalProperties": false,
+        "properties": {
+          "approval_id": { "type": "string", "pattern": "^apr_[A-Za-z0-9]{8,64}$" },
+          "action": {
+            "description": "What will happen on approval. share_availability: release an availability envelope to the other agents. commit_slot: accept a time on the student's behalf. raise_disclosure: answer a request for a level above the current ceiling. post_to_channel: publish a summary into a group chat (Track 3).",
+            "enum": ["share_availability", "commit_slot", "raise_disclosure", "post_to_channel"]
+          },
+          "proposal_id": { "type": "string", "pattern": "^prp_[A-Za-z0-9]{8,64}$" },
+          "discloses": {
+            "description": "The disclosure preview. The UI must render this before offering the approve control; T5 and T9 both have an acceptance criterion that depends on it.",
+            "type": "object",
+            "required": ["disclosure_level", "to", "summary"],
+            "additionalProperties": false,
+            "properties": {
+              "disclosure_level": { "enum": ["none", "free_busy", "category", "full"] },
+              "to": {
+                "description": "Exactly who would learn it. A channel_ref means a group chat, where the audience is everyone in the channel and not only the negotiation's participants.",
+                "type": "array",
+                "minItems": 1,
+                "items": { "type": "string", "pattern": "^(stu_[A-Za-z0-9]{16,64}|chn_[A-Za-z0-9]{8,64})$" }
+              },
+              "summary": {
+                "description": "The disclosure in the student's own words, built server-side from the payload that would actually be sent -- never a client's guess at it.",
+                "type": "string",
+                "maxLength": 280
+              },
+              "fields": {
+                "description": "The field paths that would be released, so the UI can show specifics rather than a reassuring sentence.",
+                "type": "array",
+                "maxItems": 40,
+                "items": { "type": "string", "maxLength": 80 }
+              }
+            }
+          },
+          "expires_at": { "type": "string", "format": "date-time" },
+          "state_version": {
+            "description": "The state this approval was raised against. Submit it back with the decision; a mismatch is a 409 rather than a silent approval of something the student never saw.",
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "participants": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 12,
+      "items": {
+        "type": "object",
+        "required": ["student_ref", "agent_id", "state"],
+        "additionalProperties": false,
+        "properties": {
+          "student_ref": { "type": "string", "pattern": "^stu_[A-Za-z0-9]{16,64}$" },
+          "display_name": {
+            "description": "A chosen nickname for the UI. Optional, never derived from an email or legal name, and absent for a participant who has not agreed to be named.",
+            "type": "string",
+            "maxLength": 40
+          },
+          "agent_id": { "type": "string", "pattern": "^agt_[A-Za-z0-9]{16,64}$" },
+          "state": { "enum": ["invited", "shared_availability", "proposed", "accepted", "declined", "timed_out"] },
+          "disclosure_level": { "enum": ["none", "free_busy", "category", "full"] }
+        }
+      }
+    },
+    "proposals": {
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+        "type": "object",
+        "required": ["proposal_id", "slot", "proposed_by", "votes"],
+        "additionalProperties": false,
+        "properties": {
+          "proposal_id": { "type": "string", "pattern": "^prp_[A-Za-z0-9]{8,64}$" },
+          "slot": {
+            "type": "object",
+            "required": ["start", "end"],
+            "additionalProperties": false,
+            "properties": {
+              "start": { "type": "string", "format": "date-time" },
+              "end": { "type": "string", "format": "date-time" }
+            }
+          },
+          "proposed_by": { "type": "string", "pattern": "^agt_[A-Za-z0-9]{16,64}$" },
+          "votes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["student_ref", "vote"],
+              "additionalProperties": false,
+              "properties": {
+                "student_ref": { "type": "string", "pattern": "^stu_[A-Za-z0-9]{16,64}$" },
+                "vote": { "enum": ["accept", "reject", "abstain"] },
+                "reason_code": { "enum": ["conflict", "outside_preferred_hours", "too_short", "no_overlap", "needs_human", "expired", "insufficient_authority"] }
+              }
+            }
+          }
+        }
+      }
+    },
+    "transcript": {
+      "description": "The audit trail the UI renders: what each agent said, and crucially what it DISCLOSED. Showing the student what was revealed on their behalf is a product requirement, not a debug view.",
+      "type": "array",
+      "maxItems": 200,
+      "items": {
+        "type": "object",
+        "required": ["at", "agent_id", "intent", "disclosure_level"],
+        "additionalProperties": false,
+        "properties": {
+          "at": { "type": "string", "format": "date-time" },
+          "agent_id": { "type": "string", "pattern": "^agt_[A-Za-z0-9]{16,64}$" },
+          "intent": { "enum": ["propose", "counter", "accept", "reject", "escalate"] },
+          "disclosure_level": { "enum": ["none", "free_busy", "category", "full"] },
+          "reason_code": { "enum": ["conflict", "outside_preferred_hours", "too_short", "no_overlap", "needs_human", "expired", "insufficient_authority"] },
+          "message_id": { "type": "string", "pattern": "^msg_[A-Za-z0-9]{16,64}$" },
+          "disclosed": {
+            "description": "What this message actually revealed, filtered for the viewer reading the transcript. A level alone does not let a student see what was said on their behalf -- 'free_busy' is a category, not a disclosure. For the viewer's own messages this is the full payload their agent sent; for another agent's it is what that agent disclosed to this viewer, and nothing it disclosed to anyone else.\n\nThe nested availability may not exceed the entry's own disclosure_level, enforced below. This field was added to close a gap in the API surface and reintroduced the exact defect that had just been fixed on the agent envelope: a new carrier for an availability envelope is a new place for the ladder to be bypassed, and the ladder has to travel with the payload rather than being attached to one of its carriers.\n\nThe student's own private explanations are NOT here. note_for_own_student is stripped on egress and never enters the transcript; a student asks their own agent on /me/chat.",
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "availability": { "$ref": "https://campusos.dev/contracts/v1/availability.schema.json" },
+              "proposed_slot": {
+                "type": "object",
+                "required": ["start", "end"],
+                "additionalProperties": false,
+                "properties": {
+                  "start": { "type": "string", "format": "date-time" },
+                  "end": { "type": "string", "format": "date-time" }
+                }
+              },
+              "summary_code": {
+                "description": "What this entry says, as a closed vocabulary. NOT prose. The UI renders a sentence from this code plus the structured data already in the entry -- proposed_slot, reason_code, the availability envelope. An arbitrary string here was a hole exactly the size of the one the reason_code enum exists to close: 'Ana has therapy at 2pm' is 23 characters and validates against `type: string` at every disclosure level.",
+                "enum": ["shared_availability", "proposed_slot", "countered_slot", "accepted_slot", "declined_with_reason", "escalated_to_human", "withdrew", "no_disclosure"]
+              }
+            }
+          }
+        }
+      }
+    },
+    "outcome": {
+      "type": "object",
+      "required": ["kind"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "enum": ["agreed", "no_overlap", "max_rounds_exceeded", "timed_out", "withdrawn"] },
+        "agreed_slot": {
+          "type": "object",
+          "required": ["start", "end"],
+          "additionalProperties": false,
+          "properties": {
+            "start": { "type": "string", "format": "date-time" },
+            "end": { "type": "string", "format": "date-time" }
+          }
+        },
+        "requires_human_approval": { "type": "boolean" }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "$comment": "THE LADDER, AGAIN, ON THE TRANSCRIPT. Each entry declares a disclosure_level and may carry a nested availability envelope; the nested level may not exceed the entry's. Written per-entry because JSON Schema cannot compare two values, so this is the same enumeration as in agent-protocol.schema.json applied inside transcript.items. If a third carrier for an availability envelope is ever added, it needs this too.",
+      "properties": {
+        "transcript": {
+          "items": {
+            "allOf": [
+              {
+                "if": { "properties": { "disclosure_level": { "const": "none" } }, "required": ["disclosure_level"] },
+                "then": { "properties": { "disclosed": { "properties": { "availability": { "properties": { "disclosure_level": { "const": "none" } } } } } } }
+              },
+              {
+                "if": { "properties": { "disclosure_level": { "const": "free_busy" } }, "required": ["disclosure_level"] },
+                "then": { "properties": { "disclosed": { "properties": { "availability": { "properties": { "disclosure_level": { "enum": ["none", "free_busy"] } } } } } } }
+              },
+              {
+                "if": { "properties": { "disclosure_level": { "const": "category" } }, "required": ["disclosure_level"] },
+                "then": { "properties": { "disclosed": { "properties": { "availability": { "properties": { "disclosure_level": { "enum": ["none", "free_busy", "category"] } } } } } } }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "$comment": "A converged negotiation must say what was agreed; a status with no outcome is unrenderable.",
+      "if": { "properties": { "status": { "const": "converged" } }, "required": ["status"] },
+      "then": {
+        "required": ["outcome"],
+        "properties": { "outcome": { "required": ["kind", "agreed_slot"], "properties": { "kind": { "const": "agreed" } } } }
+      }
+    },
+    {
+      "$comment": "pending_approvals is viewer-private, so it must be tied to the viewer and not to the global status. The first version of this rule required a non-empty array whenever status was awaiting_approval, which made a perfectly normal state unrepresentable: once Ana approves and Ben has not, the negotiation is still awaiting_approval and Ana's array is correctly empty. Her own client could not render the response her approval produced, and the only ways to satisfy the schema were to fabricate a decision or to show her Ben's -- a schema bug whose least-effort workaround is a privacy breach. viewer.awaiting_me now carries that question.",
+      "if": { "properties": { "viewer": { "properties": { "awaiting_me": { "const": true } }, "required": ["awaiting_me"] } }, "required": ["viewer"] },
+      "then": { "required": ["pending_approvals"], "properties": { "pending_approvals": { "minItems": 1 } } }
+    },
+    {
+      "$comment": "And the converse, so the flag cannot drift from the array it describes: nothing to decide means nothing listed. Without this, awaiting_me=false with a populated array would validate, and a UI trusting the flag would silently drop an approval the student owes.",
+      "if": { "properties": { "viewer": { "properties": { "awaiting_me": { "const": false } }, "required": ["awaiting_me"] } }, "required": ["viewer"] },
+      "then": { "properties": { "pending_approvals": { "maxItems": 0 } } }
+    },
+    {
+      "$comment": "Failure is a product outcome and must explain itself.",
+      "if": { "properties": { "status": { "const": "failed" } }, "required": ["status"] },
+      "then": { "required": ["outcome"] }
+    }
+  ]
+}

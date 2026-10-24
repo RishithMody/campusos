@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://campusos.dev/contracts/v1/agent-protocol.schema.json",
+  "title": "Agent-to-agent message envelope (v1)",
+  "description": "One message between two students' personal agents. This never travels through Cubbie: Cubbie cannot text anyone but its own student, so agent-to-agent traffic runs over the CampusOS service (see docs/adr/0001). Every field here exists because routing a message safely requires knowing who sent it, who they speak for, how far their authority runs, and how much they may disclose.",
+  "type": "object",
+  "required": ["schema_version", "message_id", "trace_id", "issued_at", "sender", "represented_student", "scope", "disclosure_level", "intent", "payload"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "message_id": { "type": "string", "pattern": "^msg_[A-Za-z0-9]{16,64}$" },
+    "trace_id": {
+      "description": "Correlates every message in one negotiation across services and logs. Required: an untraceable message cannot be audited, and the privacy claim rests on the audit trail.",
+      "type": "string",
+      "pattern": "^trc_[A-Za-z0-9]{16,64}$"
+    },
+    "in_reply_to": { "type": ["string", "null"], "pattern": "^msg_[A-Za-z0-9]{16,64}$" },
+    "issued_at": { "type": "string", "format": "date-time" },
+    "sender": {
+      "description": "The agent process that produced this message. Distinct from the student it represents: an agent is software with an identity of its own, and conflating the two is how an agent ends up speaking for someone who never authorised it.",
+      "type": "object",
+      "required": ["agent_id", "agent_version"],
+      "additionalProperties": false,
+      "properties": {
+        "agent_id": { "type": "string", "pattern": "^agt_[A-Za-z0-9]{16,64}$" },
+        "agent_version": { "type": "string", "maxLength": 32 }
+      }
+    },
+    "represented_student": {
+      "description": "Who the sender speaks for, as an opaque per-negotiation pseudonym. Never a name or email.",
+      "type": "object",
+      "required": ["student_ref"],
+      "additionalProperties": false,
+      "properties": { "student_ref": { "type": "string", "pattern": "^stu_[A-Za-z0-9]{16,64}$" } }
+    },
+    "scope": {
+      "description": "The limits of this agent's authority, as granted by its student. The receiver MUST refuse an intent not listed in actions, and MUST refuse a message whose scope has expired. Authority is explicit, bounded and expiring -- never implied by possession of a token.",
+      "type": "object",
+      "required": ["negotiation_id", "actions", "expires_at", "max_disclosure_level", "granted_by"],
+      "additionalProperties": false,
+      "properties": {
+        "negotiation_id": { "type": "string", "pattern": "^neg_[A-Za-z0-9]{16,64}$" },
+        "actions": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["propose", "counter", "accept", "reject", "escalate"] }
+        },
+        "expires_at": { "type": "string", "format": "date-time" },
+        "max_disclosure_level": {
+          "description": "The ceiling the student set. The envelope's disclosure_level may be lower, never higher. Required: an absent ceiling used to validate, which made 'unspecified authority' indistinguishable from 'full authority' -- the wrong default for the field that bounds disclosure.",
+          "enum": ["none", "free_busy", "category", "full"]
+        },
+        "granted_by": {
+          "description": "How the student authorised this. 'standing' is a preference set once; 'per_negotiation' was confirmed for this negotiation specifically. Anything that books, sends or commits requires per_negotiation.",
+          "enum": ["standing", "per_negotiation"]
+        }
+      }
+    },
+    "disclosure_level": {
+      "description": "What this message is permitted to reveal. Same ladder as availability.schema.json. At or below scope.max_disclosure_level, and at or above the nested payload.availability.disclosure_level -- both enforced structurally in allOf below, and again by the service at runtime against the authenticated grant.",
+      "enum": ["none", "free_busy", "category", "full"]
+    },
+    "intent": {
+      "description": "propose: offer a time. counter: reject the offer and offer another. accept: agree to the offer on the table. reject: decline without countering. escalate: hand the decision to the human, which is a normal outcome and not an error.",
+      "enum": ["propose", "counter", "accept", "reject", "escalate"]
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "availability": { "$ref": "https://campusos.dev/contracts/v1/availability.schema.json" },
+        "proposed_slot": {
+          "type": "object",
+          "required": ["start", "end"],
+          "additionalProperties": false,
+          "properties": {
+            "start": { "type": "string", "format": "date-time" },
+            "end": { "type": "string", "format": "date-time" }
+          }
+        },
+        "reason_code": {
+          "description": "A closed vocabulary, deliberately. Free-text reasons are how private information escapes a system that is otherwise careful: 'conflict' is routable, 'I have therapy at 2' is a leak.",
+          "enum": ["conflict", "outside_preferred_hours", "too_short", "no_overlap", "needs_human", "expired", "insufficient_authority"]
+        },
+        "note_for_own_student": {
+          "description": "Text shown ONLY to the student this agent represents, never transmitted to another student's agent. The service strips it on egress.",
+          "type": "string",
+          "maxLength": 280
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "$comment": "A propose or counter must carry something to react to.",
+      "if": { "properties": { "intent": { "enum": ["propose", "counter"] } }, "required": ["intent"] },
+      "then": { "properties": { "payload": { "required": ["proposed_slot"] } } }
+    },
+    {
+      "$comment": "A reject or escalate must say why, in the closed vocabulary.",
+      "if": { "properties": { "intent": { "enum": ["reject", "escalate"] } }, "required": ["intent"] },
+      "then": { "properties": { "payload": { "required": ["reason_code"] } } }
+    },
+    {
+      "$comment": "A counter or accept answers a specific prior message. Without in_reply_to, 'accept' means 'the offer on the table' -- ambiguous the moment two proposals are open, and the ambiguity resolves into someone being committed to a time they did not agree to.",
+      "if": { "properties": { "intent": { "enum": ["counter", "accept"] } }, "required": ["intent"] },
+      "then": { "required": ["in_reply_to"], "properties": { "in_reply_to": { "type": "string" } } }
+    },
+    {
+      "$comment": "Accepting commits the student to a time. A standing preference set once, in advance, is not consent to this specific commitment; scope.granted_by must say the student confirmed this negotiation. This is the schema half of the rule the service also enforces.",
+      "if": { "properties": { "intent": { "const": "accept" } }, "required": ["intent"] },
+      "then": { "properties": { "scope": { "properties": { "granted_by": { "const": "per_negotiation" } } } } }
+    },
+
+    {
+      "$comment": "THE DISCLOSURE LADDER, ACROSS THE WHOLE MESSAGE. Three levels appear in one envelope -- the ceiling the student granted (scope.max_disclosure_level), what this message claims to reveal (disclosure_level), and what the availability payload actually carries (payload.availability.disclosure_level). Each must be at or below the one above it. Checking them in isolation, as this schema first did, lets a free_busy message carry a full payload with a 'therapy' label: every part is internally consistent and the whole leaks. JSON Schema cannot compare enums, so the ordering is written out. none < free_busy < category < full.",
+      "if": { "properties": { "scope": { "properties": { "max_disclosure_level": { "const": "none" } }, "required": ["max_disclosure_level"] } }, "required": ["scope"] },
+      "then": { "properties": { "disclosure_level": { "const": "none" } } }
+    },
+    {
+      "$comment": "Ceiling free_busy: the message may claim none or free_busy.",
+      "if": { "properties": { "scope": { "properties": { "max_disclosure_level": { "const": "free_busy" } }, "required": ["max_disclosure_level"] } }, "required": ["scope"] },
+      "then": { "properties": { "disclosure_level": { "enum": ["none", "free_busy"] } } }
+    },
+    {
+      "$comment": "Ceiling category: everything but full.",
+      "if": { "properties": { "scope": { "properties": { "max_disclosure_level": { "const": "category" } }, "required": ["max_disclosure_level"] } }, "required": ["scope"] },
+      "then": { "properties": { "disclosure_level": { "enum": ["none", "free_busy", "category"] } } }
+    },
+    {
+      "$comment": "Message none: the payload may not carry an availability envelope above none either.",
+      "if": { "properties": { "disclosure_level": { "const": "none" } }, "required": ["disclosure_level"] },
+      "then": { "properties": { "payload": { "properties": { "availability": { "properties": { "disclosure_level": { "const": "none" } } } } } } }
+    },
+    {
+      "$comment": "Message free_busy: the nested envelope may not be category or full.",
+      "if": { "properties": { "disclosure_level": { "const": "free_busy" } }, "required": ["disclosure_level"] },
+      "then": { "properties": { "payload": { "properties": { "availability": { "properties": { "disclosure_level": { "enum": ["none", "free_busy"] } } } } } } }
+    },
+    {
+      "$comment": "Message category: the nested envelope may not be full.",
+      "if": { "properties": { "disclosure_level": { "const": "category" } }, "required": ["disclosure_level"] },
+      "then": { "properties": { "payload": { "properties": { "availability": { "properties": { "disclosure_level": { "enum": ["none", "free_busy", "category"] } } } } } } }
+    }
+  ]
+}
