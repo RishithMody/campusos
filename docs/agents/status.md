@@ -36,7 +36,7 @@ kept **validated and submittable on short notice**.
 |---|---|---|---|---|---|
 | — | Orchestrator | T0 | claude | `~/campusos` (primary) | **`DONE`** — signed off 2026-10-24 |
 | — | Orchestrator | T0b | claude | — | **blocked on D2** (roster + owner) |
-| — | Orchestrator | T1 | claude | — | **ready to start** |
+| — | Orchestrator | T1 | claude | `~/campusos-worktrees/T1-architecture` | **`REVIEW`** — awaiting Codex + merge |
 | 1 | Backend Engineer | T2 | codex | — | waiting on T1 |
 | 2 | GPU Infra Engineer | T3 | codex | — | waiting on T1 |
 | 3 | ML Engineer | T4 | claude | — | waiting on T1 |
@@ -47,25 +47,30 @@ kept **validated and submittable on short notice**.
 
 ## Immediate next action
 
-**Human:** supply **D2** — the team roster (1–4 members, name + school email each) and which
-member **owns** the entry. It is the last thing blocking T0b, the only mandatory deliverable.
+**Human, two things:**
 
-In parallel, T1 (architecture and contracts) is `READY` and depends on nothing:
+1. **Review and merge T1.** The contracts are done and waiting on `task/T1-architecture`.
+   Nothing else can start until they are on `main`.
 
-```bash
-cd ~/campusos
-./scripts/agents.sh create orchestrator T1
-```
+   ```bash
+   cd ~/campusos
+   ./scripts/agents.sh review T1          # independent Codex review
+   git merge --no-ff task/T1-architecture # your decision, not an agent's
+   ```
 
-T0b and T1 are both Orchestrator tasks and do not consume implementation slots, so they can run
-in either order. T1 is unblocked now; T0b needs D2.
+2. **Supply D2** — the team roster (1–4 members, name + school email each) and which member
+   **owns** the entry. It is the last thing blocking T0b, the only mandatory deliverable.
+
+After the merge, the Orchestrator moves T2/T3/T4 to `READY` and the first parallel batch starts.
+**Do not `create` T2/T3/T4 before merging** — they would branch from a `main` with no
+`contracts/` in it.
 
 ## Blocked and waiting
 
 | Task | Waiting on | Who unblocks it |
 |---|---|---|
 | T0b | **D2** — team roster and entry owner | **Human** |
-| T2, T3, T4 | T1 (`contracts/` published and merged) | Orchestrator |
+| T2, T3, T4 | **T1 merged to `main`** — contracts exist only on the branch | **Human** (merge) |
 | T5 | T1 + contracts declared **stable** | Orchestrator |
 | T6 | T3, T4 **and** a human-signed GPU approval token | Human |
 | T7 | T2, T3, T5 | the three implementation agents |
@@ -92,6 +97,7 @@ in either order. T1 is unblocked now; T0b needs D2.
 | Task | Attempts used | Verdict | Escalated |
 |---|---|---|---|
 | T0 | 0 | approved by the human 2026-10-24 | no |
+| T1 | 0 | awaiting Codex review | no |
 
 The loop is bounded at **3** repair attempts per task; the fourth attempt is refused and
 `docs/agents/reviews/<TASK>/ESCALATION.md` is written instead.
@@ -100,11 +106,13 @@ The loop is bounded at **3** repair attempts per task; the fourth attempt is ref
 
 | Contract | Status |
 |---|---|
-| `contracts/agent-protocol.schema.json` | not created (T1) |
-| `contracts/api.openapi.yaml` | not created (T1) |
-| `contracts/negotiation-state.schema.json` | not created (T1) |
-| `contracts/availability.schema.json` | not created (T1) — **new**, shared by all three tracks |
-| `contracts/inference.md` | not created (T1) |
+| `contracts/agent-protocol.schema.json` | **published on `task/T1-architecture`** — not yet on `main` |
+| `contracts/api.openapi.yaml` | **published on `task/T1-architecture`** — not yet on `main` |
+| `contracts/negotiation-state.schema.json` | **published on `task/T1-architecture`** — not yet on `main` |
+| `contracts/availability.schema.json` | **published on `task/T1-architecture`** — shared by all three tracks |
+| `contracts/inference.md` | **published on `task/T1-architecture`** — not yet on `main` |
+
+They become frozen when the human merges. Until then they are reviewable and changeable.
 
 Once published, a contract is **frozen**. Changes go through the Orchestrator, who versions
 the change and notifies every dependent agent.
