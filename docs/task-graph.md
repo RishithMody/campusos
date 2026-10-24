@@ -178,8 +178,8 @@ pivot away from solo study planning, which collides with Cubbie's built-in `stud
 |---|---|
 | **Agent** | Orchestrator (Claude Code) |
 | **Depends on** | — |
-| **Status** | `REVIEW` — attempt 2, awaiting re-review and the human's merge |
-| **Repair attempts** | 1 / 3 used |
+| **Status** | `REVIEW` — attempt 3, awaiting re-review and the human's merge |
+| **Repair attempts** | **2 / 3 used — one left** |
 | **Branch / worktree** | `task/T1-architecture` → `~/campusos-worktrees/T1-architecture` |
 | **Owns** | `docs/architecture.md`, `contracts/`, `docs/adr/` |
 | **Handoff** | `docs/agents/handoffs/T1-1.md` (on the branch) |
@@ -227,6 +227,15 @@ The Skill↔platform boundary is plain HTTPS on port 443 to a publicly reachable
 **Delivered 2026-10-24** on `task/T1-architecture`: five contracts, 20 fixtures (11 deliberate
 over-disclosure and malformed-state attempts, all rejected), `docs/architecture.md`, and filled
 assignments for T2–T5 and T9. `validate_contracts.py --strict` green; tooling suite 35 passed.
+
+**Review attempt 2 (Codex): `CHANGES_REQUESTED`, six findings — all addressed in attempt 3.**
+The instructive one: `transcript[].disclosed` was added by the commit that fixed the envelope
+leak below, and reintroduced the identical bypass — a `free_busy` entry carrying a `full`
+payload labelled `therapy`, plus free prose at any level. The ladder travels with the payload,
+not with one of its carriers, so `scripts/ci/check_disclosure_matrix.py` now sweeps every
+carrier and fails when a schema grows one it does not know about. Also: a partially-approved
+negotiation was unrepresentable and both workarounds were privacy breaches; Track 3 consent
+could not be completed from the published API. See `docs/agents/reviews/T1/attempt-2.md`.
 
 **Review attempt 1 (Codex): `CHANGES_REQUESTED`, seven findings — all addressed in attempt 2.**
 The one that mattered: the agent envelope would carry a `full` availability payload labelled
