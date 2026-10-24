@@ -35,26 +35,24 @@ kept **validated and submittable on short notice**.
 | Slot | Agent | Task | CLI | Worktree | State |
 |---|---|---|---|---|---|
 | — | Orchestrator | T0 | claude | `~/campusos` (primary) | **`DONE`** — signed off 2026-10-24 |
-| — | Backend Engineer | T2 | codex | — | **`DONE`** — merged 2026-10-24, worktree cleaned up |
+| — | Backend Engineer | T2 | codex | — | **`DONE`** — merged 2026-10-24 |
+| — | Frontend Engineer | T9 | codex | — | **`DONE`** — merged 2026-10-24. **Not live-verified** |
 | — | Orchestrator | T0b | claude | `~/campusos-worktrees/T0b-cubbie-skill` | **`REVIEW`** — Skill + public package ready for owner acceptance |
 | — | Orchestrator | T0c | claude | — | **blocked on D2** — publish + submit |
 | — | Orchestrator | T1 | claude | `~/campusos-worktrees/T1-architecture` | **`REVIEW_WAIVED`** — merged to `main`. Not a `PASS` |
-| 1 | Frontend Engineer | T9 | codex | `~/campusos-worktrees/T9-groupchat` | **`READY`** — worktree created, backend merged |
+| 1 | QA / Security Reviewer | T7a | codex | `~/campusos-worktrees/T7a-live-verify` | **`READY`** — needs a Discord token + owner go-ahead |
 | 2 | GPU Infra Engineer | T3 | codex | `~/campusos-worktrees/T3-gpu` | `READY` — **deprioritised below Track 1**, not started |
 | 3 | ML Engineer | T4 | claude | `~/campusos-worktrees/T4-ml-baseline` | `READY` — **deprioritised below Track 1**, not started |
 | — | Frontend Engineer | T5 → T9 | codex | — | waiting on stable `contracts/` |
 | — | QA / Security Reviewer | checkpoints | codex / claude | — | idle (no implementation slot) |
 
-**Slots: 3 / 3 reserved, 0 agents running right now.**
+**Slots: 2 / 3 reserved** (T3, T4). T7a is QA work and consumes none.
 
-`./scripts/agents.sh status` counts *worktrees*: T9, T3 and T4 each have one. **T9 is the
-one to start.** T3 and T4 are provisioned but parked behind Track 1 by the owner.
+**T7a is the one to start**, and it is the highest-value work left: everything shipped so
+far has been verified against a mock, and T7a finds out what breaks when it is not.
 
-T2 is merged and its worktree was cleaned up, which is what freed the slot T9 now holds — the
-honest way to make room, rather than `CAMPUSOS_ALLOW_OVER_LIMIT`. If T5 needs to start before
-T3/T4 do, clean up an unused worktree the same way.
-
-T0b is Orchestrator work and consumes no slot.
+T3 and T4 hold the two reserved slots and remain parked behind Track 1. T0b is Orchestrator
+work and T7a is QA work; neither consumes a slot.
 
 ## Immediate next action
 
@@ -64,7 +62,11 @@ reports are the best account of what is sharp about these contracts. Short and s
 
 **Human, two things:**
 
-1. **Accept T0b, then unblock T0c.** The Skill is built, validated and packaged; the only
+1. **Supply a Discord bot token and a test server for T7a**, and say whether we may connect.
+   Nothing in this project has ever contacted real Discord. The PostgreSQL and Redis half of
+   T7a is local and can start immediately without either.
+
+2. **Accept T0b, then unblock T0c.** The Skill is built, validated and packaged; the only
    acceptance criterion left is one nobody can meet locally — installing it on a real Cubbie
    account, which needs the public repo to exist.
 
@@ -75,7 +77,7 @@ reports are the best account of what is sharp about these contracts. Short and s
 
    Then `submission/track1/SUBMISSION.md` has the ordered checklist.
 
-2. **Supply D2** — the team roster (1–4 members, name + school email each) and which member
+3. **Supply D2** — the team roster (1–4 members, name + school email each) and which member
    **owns** the entry. It no longer blocks *building* Track 1 (that is done); it blocks
    **publishing and submitting** it, which is T0c, and every other submission after that.
 
@@ -86,8 +88,10 @@ T3 and T4 stay parked until Track 1 is in. T2 keeps running.
 | Task | Waiting on | Who unblocks it |
 |---|---|---|
 | T0b | **D2** — team roster and entry owner | **Human** |
-| T5 | queued behind T9 by owner priority; its dependencies are satisfied | Orchestrator |
-| T7 | T2 ✅, T3, T5 | T3 and T5 |
+| T5 | queued by owner priority; its dependencies are satisfied | Orchestrator |
+| T7a | **a Discord bot token + a test server, and the owner's go-ahead to connect** | **Human** |
+| T7 | T2 ✅, T9 ✅, T3, T5 | T3 and T5 |
+| T11 | T0c, and T7a before Track 3 can be called live-verified | **Human** (D2) |
 | T6 | T3, T4 **and** a human-signed GPU approval token | Human |
 | T7 | T2, T3, T5 | the three implementation agents |
 | T10 | T0b (eligibility), T7 | Orchestrator |
