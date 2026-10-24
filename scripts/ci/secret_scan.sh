@@ -49,13 +49,14 @@ done <<< "$FILES"
 # One pattern per line: <label>|<ERE>
 PATTERNS='AWS access key id|AKIA[0-9A-Z]{16}
 Private key block|-----BEGIN [A-Z ]*PRIVATE KEY-----
-GitHub token|gh[pousr]_[A-Za-z0-9]{36}
+GitHub token|gh[pousr]_[A-Za-z0-9]{30,}
 OpenAI API key|sk-[A-Za-z0-9]{32,}
 Anthropic API key|sk-ant-[A-Za-z0-9_-]{20,}
 Slack token|xox[baprs]-[A-Za-z0-9-]{10,}
 HuggingFace token|hf_[A-Za-z0-9]{30,}
 Google API key|AIza[0-9A-Za-z_-]{35}
-Hardcoded secret assignment|(api[_-]?key|secret[_-]?key|client[_-]?secret|access[_-]?token|auth[_-]?token|password|passwd)[[:space:]]*[:=][[:space:]]*.{0,2}[A-Za-z0-9/+_-]{16,}'
+Hardcoded secret assignment|(api[_-]?key|secret[_-]?key|client[_-]?secret|access[_-]?token|auth[_-]?token|api[_-]?secret|app[_-]?secret|private[_-]?key|passphrase|password|passwd|token|secret|credential)[[:space:]]*[:=][[:space:]]*.{0,2}[A-Za-z0-9/+_-]{16,}
+Bearer credential|[Bb]earer[[:space:]]+[A-Za-z0-9._~+/-]{20,}'
 
 while IFS= read -r f; do
   [ -z "$f" ] && continue

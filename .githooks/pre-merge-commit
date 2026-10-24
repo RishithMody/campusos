@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 #
-# pre-merge-commit — agents must never merge. Merging is the human's control point.
+# pre-merge-commit — agents must never merge another branch's work into their own,
+# and never merge into the base branch. Integration is the human's control point.
+#
+# Updating your own task branch *from* the base branch is allowed: that is routine
+# hygiene, not integration. Anything else from an agent worktree is refused.
 #
 set -uo pipefail
 RED=$'\033[31m'; N=$'\033[0m'
@@ -8,11 +12,16 @@ RED=$'\033[31m'; N=$'\033[0m'
 GITDIR="$(git rev-parse --path-format=absolute --git-dir)"
 COMMONDIR="$(git rev-parse --path-format=absolute --git-common-dir)"
 
-if [ "$GITDIR" != "$COMMONDIR" ]; then
-  printf '%s✗ pre-merge-commit blocked this merge%s\n\n' "$RED" "$N" >&2
-  cat >&2 <<'MSG'
-Merges are not performed from agent worktrees.
+# The primary worktree is the human's and the Orchestrator's; merging there is the point.
+[ "$GITDIR" = "$COMMONDIR" ] && exit 0
 
+BASE="${CAMPUSOS_BASE_BRANCH:-main}"
+BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo HEAD)"
+
+refuse() {
+  printf '%s✗ pre-merge-commit blocked this merge%s\n\n' "$RED" "$N" >&2
+  printf '%s\n\n' "$1" >&2
+  cat >&2 <<'MSG'
 Integration and merge approval are human decisions — that is the operator's main
 control over a multi-agent system. Finish your task, write a handoff, and set the
 task to REVIEW instead:
@@ -21,5 +30,28 @@ task to REVIEW instead:
 
 MSG
   exit 1
+}
+
+# 1. Never merge into the base branch from an agent worktree.
+case "$BRANCH" in
+  "$BASE"|main|master)
+    refuse "You are merging into '$BRANCH' from an agent worktree." ;;
+esac
+
+# 2. Only commits already contained in the base branch may be merged in. That permits
+#    'git merge $BASE' (updating your branch) and refuses another agent's task branch,
+#    which would blur file ownership and smuggle unreviewed work into your diff.
+if [ -f "$(git rev-parse --git-dir)/MERGE_HEAD" ]; then
+  while read -r sha; do
+    [ -z "$sha" ] && continue
+    if ! git merge-base --is-ancestor "$sha" "refs/heads/$BASE" 2>/dev/null; then
+      desc="$(git name-rev --name-only "$sha" 2>/dev/null || echo "$sha")"
+      refuse "You are merging '$desc', which is not contained in '$BASE'.
+
+Agents may update their own branch from $BASE, but may not merge another agent's
+work into theirs. Each task is reviewed on its own diff."
+    fi
+  done < "$(git rev-parse --git-dir)/MERGE_HEAD"
 fi
+
 exit 0
