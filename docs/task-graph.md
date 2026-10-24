@@ -78,7 +78,8 @@ the Track 2 agent-to-agent message, and the Track 3 group-chat payload. The back
 | ID | Task | Track | Agent | CLI | Depends on | Status |
 |---|---|---|---|---|---|---|
 | T0 | Verify hackathon requirements | all | Orchestrator | Claude Code | — | `DONE` |
-| T0b | **Track 1 Cubbie Skill + submission** | 1 | Orchestrator | Claude Code | T0 + **D2** | `BLOCKED` (D2) |
+| T0b | **Track 1 Cubbie Skill** (build) | 1 | Orchestrator | Claude Code | T0 | `READY` |
+| T0c | **Track 1 submission** (publish + submit) | 1 | Orchestrator | Claude Code | T0b + **D2** | `BLOCKED` (D2) |
 | T1 | Architecture & shared contracts | all | Orchestrator | Claude Code | — | `REVIEW_WAIVED` |
 | T2 | Backend implementation | 1·2·3 | Backend Engineer | Codex | T1 | `READY` |
 | T3 | GPU inference setup (vLLM) | 2·3 | GPU Infra Engineer | Codex | T1 | `READY` |
@@ -147,11 +148,25 @@ D2 (team roster and entry owner) remains open and blocks submission, not archite
 | | |
 |---|---|
 | **Agent** | Orchestrator (Claude Code) |
-| **Depends on** | T0 ✅ **and** human decision D2 (roster + entry owner) |
-| **Status** | `BLOCKED` — on D2 only |
+| **Depends on** | T0 ✅ |
+| **Status** | `READY` — **building now**, in parallel with T2 |
 | **Branch / worktree** | `task/T0b-cubbie-skill` → `~/campusos-worktrees/T0b-cubbie-skill` |
 | **Owns** | `skills/squad-sync/`, `submission/track1/` |
-| **Publishes to** | a **separate public GitHub repo** (D1); `campusos` stays private |
+| **Publishes to** | nothing yet. Publication is **T0c**, which is blocked on D2 |
+
+### T0b builds; T0c publishes. They were one task and should not have been.
+
+D2 (the roster and entry owner) blocks **submitting**, not **writing**. Collapsing the two meant
+the only mandatory deliverable sat untouched waiting on a decision it did not need, while the
+product build ran ahead of it. Split on 2026-10-24 by the owner's direction:
+
+| | T0b — build | T0c — publish and submit |
+|---|---|---|
+| Needs | nothing beyond T0 | **D2**, and the owner's explicit yes |
+| Produces | `skills/squad-sync/`, `submission/track1/` | a public repo, a gallery entry |
+| Blocked by | — | D2 · owner approval · D1 public-repo creation |
+
+Nothing in T0b leaves this private repository.
 
 **The highest-priority task in the project.** It is the only mandatory deliverable, it gates
 Tracks 2 and 3, and it is scored on votes accumulated over time — so every day it is not live

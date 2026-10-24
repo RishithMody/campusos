@@ -72,6 +72,7 @@ task_slug() {
   case "$1" in
     T0)  echo "requirements" ;;
     T0b) echo "cubbie-skill" ;;
+    T0c) echo "track1-submission" ;;
     T1)  echo "architecture" ;;
     T2)  echo "backend" ;;
     T3)  echo "gpu" ;;
@@ -216,7 +217,7 @@ cmd_list() {
   printf '%-6s %-12s %-26s %-10s %s\n' "-" "orchestr." "$main_branch" "-" "$REPO_ROOT (primary)"
 
   local found=0 t path role r meta
-  for t in T0 T0b T1 T2 T3 T4 T5 T6 T7 T8; do
+  for t in T0 T0b T0c T1 T2 T3 T4 T5 T6 T7 T8 T9 T10 T11; do
     path="$(path_for "$t")"
     [ -d "$path" ] || continue
     found=1
@@ -255,7 +256,7 @@ cmd_status() {
 
   hdr "Worktree detail"
   local any=0 t path branch dirty ahead behind last reviews esc
-  for t in T0 T0b T1 T2 T3 T4 T5 T6 T7 T8; do
+  for t in T0 T0b T0c T1 T2 T3 T4 T5 T6 T7 T8 T9 T10 T11; do
     path="$(path_for "$t")"
     [ -d "$path" ] || continue
     any=1

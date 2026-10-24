@@ -105,6 +105,8 @@ t "create: T11 is a known task"   1 $A create orchestrator T11
 t "T9 is not reported unknown"    1 bash -c "$A create frontend T9 2>&1 | grep -q 'unknown task'"
 t "T10 is not reported unknown"   1 bash -c "$A create orchestrator T10 2>&1 | grep -q 'unknown task'"
 t "T11 is not reported unknown"   1 bash -c "$A create orchestrator T11 2>&1 | grep -q 'unknown task'"
+t "create: T0c is a known task"   1 bash -c "$A create orchestrator T0c 2>&1 | grep -q \"unknown task\""
+t "T0c is not reported unknown"   1 bash -c "$A create orchestrator T0c 2>&1 | grep -q \"unknown task\""
 t "T99 is still reported unknown" 0 bash -c "$A create ml T99 2>&1 | grep -q 'unknown task'"
 
 echo "Review waiver is an honest override"
