@@ -48,7 +48,9 @@ jobs:
           for req in backend/requirements.txt ml/requirements.txt requirements-dev.txt; do
             if [ -f "$req" ]; then pip install -r "$req"; fi
           done
-          [ -f pyproject.toml ] && pip install -e . || true
+          # Only install the project when pyproject actually declares a package;
+          # ours currently holds tool config (ruff/mypy/pytest) and nothing to build.
+          if grep -q '^\[project\]' pyproject.toml 2>/dev/null; then pip install -e .; fi
 
       - name: Lint (ruff)
         if: steps.detect.outputs.found == 'true'

@@ -45,6 +45,7 @@ if [ "$IN_AGENT_WORKTREE" = "1" ]; then
       CLAUDE.md|AGENTS.md|docs/task-graph.md|docs/agents/status.md) VIOLATIONS="$VIOLATIONS  $f"$'\n' ;;
       docs/agents/roles/*|.github/*|.githooks/*)                    VIOLATIONS="$VIOLATIONS  $f"$'\n' ;;
       scripts/agents.sh|scripts/lib/*|scripts/ci/*)                 VIOLATIONS="$VIOLATIONS  $f"$'\n' ;;
+      pyproject.toml)                                               VIOLATIONS="$VIOLATIONS  $f"$'\n' ;;
     esac
   done <<< "$STAGED"
 

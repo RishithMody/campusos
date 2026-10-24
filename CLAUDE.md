@@ -70,6 +70,7 @@ from an agent worktree:
 - `docs/agents/roles/**`
 - `scripts/agents.sh`, `scripts/lib/**`, `scripts/ci/**`
 - `.github/**`, `.githooks/**`
+- `pyproject.toml` (shared lint/type/test conventions)
 
 You *are* expected to write to `docs/agents/handoffs/`, `docs/agents/reviews/`, and your own
 `docs/agents/assignments/<TASK_ID>.md` status line.

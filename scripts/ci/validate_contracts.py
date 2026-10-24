@@ -135,7 +135,9 @@ def main() -> int:
     for e in errors:
         print(f"ERROR {e}")
 
-    print(f"\n{checked} contract file(s) parsed, {len(errors)} error(s), {len(warnings)} warning(s)")
+    print(
+        f"\n{checked} contract file(s) parsed, {len(errors)} error(s), {len(warnings)} warning(s)"
+    )
     return 1 if errors else 0
 
 
