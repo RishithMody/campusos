@@ -706,6 +706,16 @@ cmd_handoff() {
 
 # ------------------------------------------------------------------ cmd: doctor
 
+# The contract validator needs PyYAML and jsonschema. They live in the primary worktree's
+# gitignored .venv, which every agent worktree shares.
+venv_python() {
+  local primary; primary="$(dirname "$(git -C "$REPO_ROOT" rev-parse --path-format=absolute --git-common-dir)")"
+  for c in "$REPO_ROOT/.venv/bin/python" "$primary/.venv/bin/python"; do
+    [ -x "$c" ] && { echo "$c"; return 0; }
+  done
+  return 1
+}
+
 cmd_doctor() {
   local fail=0
   hdr "CampusOS orchestration health check"
@@ -762,6 +772,24 @@ cmd_doctor() {
     [ -f "$REPO_ROOT/$f" ] || { warn "$f missing"; fail=1; }
   done
   ok "six role definitions present"
+
+  hdr "Contract validation environment"
+  local vpy
+  if vpy="$(venv_python)"; then
+    ok "python venv: ${vpy#$REPO_ROOT/}"
+    if "$vpy" -c "import yaml, jsonschema" 2>/dev/null; then
+      ok "PyYAML and jsonschema installed"
+    else
+      warn "venv is missing PyYAML or jsonschema — validate_contracts.py will FAIL, not skip"
+      info "  uv pip install --python \"$vpy\" pyyaml jsonschema"
+      fail=1
+    fi
+  else
+    warn "no .venv found — validate_contracts.py cannot check the contracts"
+    info "  cd ~/campusos && uv venv --python 3.11 .venv"
+    info "  uv pip install --python .venv/bin/python pyyaml jsonschema"
+    fail=1
+  fi
 
   hdr "Concurrency"
   info "  $(count_impl_worktrees)/$MAX_IMPL_AGENTS implementation slots in use"

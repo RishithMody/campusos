@@ -28,6 +28,10 @@ than no check, because it reports success. Run it as:
 .venv/bin/python scripts/ci/validate_contracts.py
 ```
 
+**Agent worktrees share this one venv.** `.venv/` is gitignored, so a new worktree has none of
+its own; the tooling falls back to the primary worktree's. Create it once here and every agent
+is covered. `./scripts/agents.sh doctor` checks for it and names what is missing.
+
 `doctor` checks both CLIs, your Git identity, the hooks, and every coordination file. Fix
 anything it flags before starting an agent.
 

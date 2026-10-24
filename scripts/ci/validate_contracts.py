@@ -54,7 +54,9 @@ REQUIRED_ENVELOPE_FIELDS = {
 
 SETUP_HINT = (
     "install it with:  uv pip install --python .venv/bin/python pyyaml jsonschema\n"
-    "         then run: .venv/bin/python scripts/ci/validate_contracts.py"
+    "         then run: .venv/bin/python scripts/ci/validate_contracts.py\n"
+    "         from an agent worktree the venv lives in the primary worktree:\n"
+    "         ~/campusos/.venv/bin/python scripts/ci/validate_contracts.py"
 )
 
 errors: list[str] = []

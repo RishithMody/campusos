@@ -36,7 +36,12 @@ have() { command -v "$1" >/dev/null 2>&1; }
 
 # The contract validator needs PyYAML and jsonschema. The repo venv has them; a bare
 # system python does not, and the validator is supposed to refuse rather than pretend.
-if [ -x .venv/bin/python ]; then PYBIN=.venv/bin/python; else PYBIN=python3; fi
+# Agent worktrees have no .venv of their own -- it is gitignored and lives in the primary
+# worktree -- so fall back to that one. Python dependencies are not branch-specific.
+PRIMARY="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
+if   [ -x .venv/bin/python ];           then PYBIN=.venv/bin/python
+elif [ -x "$PRIMARY/.venv/bin/python" ]; then PYBIN="$PRIMARY/.venv/bin/python"
+else PYBIN=python3; fi
 if have claude && have codex; then HAVE_CLIS=1; else HAVE_CLIS=0; fi
 
 echo "Read-only commands"
