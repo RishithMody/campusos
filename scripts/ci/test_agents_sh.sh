@@ -30,9 +30,19 @@ t() {
 }
 skip() { skipped=$((skipped + 1)); printf '  SKIP  %-50s (%s)\n' "$1" "$2"; }
 
+# The agent CLIs are not installed on a CI runner, and the script is supposed to refuse
+# rather than pretend. Tests that need one adapt instead of failing spuriously.
+have() { command -v "$1" >/dev/null 2>&1; }
+if have claude && have codex; then HAVE_CLIS=1; else HAVE_CLIS=0; fi
+
 echo "Read-only commands"
 t "help"                          0 $A help
-t "doctor"                        0 $A doctor
+if [ "$HAVE_CLIS" = "1" ]; then
+  t "doctor: passes with both CLIs"  0 $A doctor
+else
+  # Correct behaviour without the CLIs: report the gap and exit non-zero.
+  t "doctor: reports missing CLIs"   1 $A doctor
+fi
 t "list"                          0 $A list
 t "status"                        0 $A status
 t "unknown command is rejected"   1 $A bogus-command
@@ -82,7 +92,12 @@ else
   t "create: never overwrites"        1 $A create orchestrator T1
   t "list with a worktree"            0 $A list
   t "status with a worktree"          0 $A status
-  t "start: dry run resolves"         0 env CAMPUSOS_DRY_RUN=1 $A start orchestrator T1
+  if have claude; then
+    t "start: dry run resolves"       0 env CAMPUSOS_DRY_RUN=1 $A start orchestrator T1
+  else
+    t "start: refuses, claude absent" 1 env CAMPUSOS_DRY_RUN=1 $A start orchestrator T1
+    skip "start: dry run resolves" "claude not installed"
+  fi
   t "review: refuses, no commits"     1 $A review T1
   t "handoff: scaffolds a file"       0 $A handoff T1
   t "cleanup: refuses when dirty"     1 $A cleanup T1
