@@ -35,7 +35,8 @@ kept **validated and submittable on short notice**.
 | Slot | Agent | Task | CLI | Worktree | State |
 |---|---|---|---|---|---|
 | — | Orchestrator | T0 | claude | `~/campusos` (primary) | **`DONE`** — signed off 2026-10-24 |
-| — | Orchestrator | T0b | claude | — | **blocked on D2** (roster + owner) |
+| — | Orchestrator | T0b | claude | `~/campusos-worktrees/T0b-cubbie-skill` | **`REVIEW`** — Skill built + validated, nothing published |
+| — | Orchestrator | T0c | claude | — | **blocked on D2** — publish + submit |
 | — | Orchestrator | T1 | claude | `~/campusos-worktrees/T1-architecture` | **`REVIEW_WAIVED`** — merged to `main`. Not a `PASS` |
 | 1 | Backend Engineer | T2 | codex | `~/campusos-worktrees/T2-backend` | **`READY`** — worktree created |
 | 2 | GPU Infra Engineer | T3 | codex | `~/campusos-worktrees/T3-gpu` | **`READY`** — worktree created |
