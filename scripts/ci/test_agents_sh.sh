@@ -57,13 +57,42 @@ t "status"                        0 $A status
 t "unknown command is rejected"   1 $A bogus-command
 
 echo "Guards refuse what they must"
+WT_BEFORE="$(git worktree list | wc -l)"
 t "create: unknown role"          1 $A create nosuchrole
 t "create: unknown task"          1 $A create ml T99
-t "create: BLOCKED task"          1 $A create backend
-t "start: missing worktree"       1 env CAMPUSOS_ALLOW_BLOCKED=1 $A start backend
-t "review: missing worktree"      1 $A review backend
-t "cleanup: missing worktree"     1 $A cleanup backend
+# These four exercise guards that, if the guard is broken, DO something: create a
+# worktree, or delete one. They used to hardcode `backend` (T2), which was safe only for
+# as long as T2 was BLOCKED with no worktree. Once T2 went READY and got one, the create
+# test created a real worktree and the cleanup test deleted it -- the suite quietly
+# destroyed a live agent's branch, which is the worst possible moment to find this out.
+#
+# So the target is chosen at run time: a task that is BLOCKED *and* has no worktree. If
+# the graph has no such task, these skip rather than reach for a live one.
+SAFE_ROLE=""; SAFE_TASK=""
+for pair in "ml T6" "qa T7" "orchestrator T8" "frontend T5" "frontend T9" "orchestrator T10"; do
+  cand_role="${pair%% *}"; cand_task="${pair##* }"
+  [ "$($A status 2>/dev/null | awk -v t="$cand_task" '$1==t {print $2}')" = "BLOCKED" ] || continue
+  git worktree list --porcelain | grep -q "/${cand_task}-" && continue
+  SAFE_ROLE="$cand_role"; SAFE_TASK="$cand_task"; break
+done
+
+if [ -z "$SAFE_TASK" ]; then
+  skip "create: BLOCKED task"      "no BLOCKED task without a worktree to test against"
+  skip "start: missing worktree"   "same"
+  skip "review: missing worktree"  "same"
+  skip "cleanup: missing worktree" "same"
+else
+  t "create: BLOCKED task ($SAFE_TASK)"      1 $A create "$SAFE_ROLE" "$SAFE_TASK"
+  t "start: missing worktree ($SAFE_TASK)"   1 \
+    env CAMPUSOS_ALLOW_BLOCKED=1 $A start "$SAFE_ROLE" "$SAFE_TASK"
+  t "review: missing worktree ($SAFE_TASK)"  1 $A review "$SAFE_TASK"
+  t "cleanup: missing worktree ($SAFE_TASK)" 1 $A cleanup "$SAFE_TASK"
+fi
 t "cleanup: unknown argument"     1 $A cleanup nosuchthing
+
+# Whatever happened above, the suite must not have created or destroyed a worktree.
+t "guards left every worktree alone" 0 \
+  bash -c "[ \"$(git worktree list | wc -l)\" = \"$WT_BEFORE\" ]"
 
 echo "Three-track task IDs are known to the tooling"
 # T9/T10/T11 were added when the project expanded to all three Cubbie tracks. A task the
