@@ -81,14 +81,14 @@ the Track 2 agent-to-agent message, and the Track 3 group-chat payload. The back
 | T0b | **Track 1 Cubbie Skill** (build) | 1 | Orchestrator | Claude Code | T0 | `REVIEW` |
 | T0c | **Track 1 submission** (publish + submit) | 1 | Orchestrator | Claude Code | T0b + **D2** | `BLOCKED` (D2) |
 | T1 | Architecture & shared contracts | all | Orchestrator | Claude Code | — | `REVIEW_WAIVED` |
-| T2 | Backend implementation | 1·2·3 | Backend Engineer | Codex | T1 | `REVIEW` |
+| T2 | Backend implementation | 1·2·3 | Backend Engineer | Codex | T1 | `DONE` |
 | T3 | GPU inference setup (vLLM) | 2·3 | GPU Infra Engineer | Codex | T1 | `READY` |
 | T4 | ML evaluation baseline | 2 | ML Engineer | Claude Code | T1 | `READY` |
-| T5 | Frontend: negotiation visualisation | 2 | Frontend Engineer | Codex | T1 + stable `contracts/` | `BLOCKED` |
+| T5 | Frontend: negotiation visualisation | 2 | Frontend Engineer | Codex | T1 + stable `contracts/` | `BLOCKED` (queued) |
 | T6 | Optional LoRA fine-tuning | 2 | ML Engineer | Claude Code | T3, T4 | `BLOCKED` |
 | T7 | End-to-end integration | 2 | QA / Orchestrator | Codex + Claude Code | T2, T3, T5 | `BLOCKED` |
 | T8 | Final demo & all-track submission check | all | Orchestrator | Claude Code | T0b, T10, T11 | `BLOCKED` |
-| T9 | **Track 3 group chat assistant (Discord)** | 3 | Frontend Engineer | Codex | T1, T2 | `BLOCKED` |
+| T9 | **Track 3 group chat assistant (Discord)** | 3 | Frontend Engineer | Codex | T1, T2 | `READY` |
 | T10 | **Track 2 submission package** | 2 | Orchestrator | Claude Code | T0b, T7 | `BLOCKED` |
 | T11 | **Track 3 submission package** | 3 | Orchestrator | Claude Code | T0b, T9 | `BLOCKED` |
 
@@ -321,6 +321,25 @@ promoting them now would point three agents at a `main` with no contracts.
 - Negotiation state-transition tests covering each edge, including failure to converge
 
 ---
+
+**Merged 2026-10-24 with `--no-ff`.** Reviewed by Claude Code (Codex implemented it), verdict
+`PASS`, one nit, no blockers — `docs/agents/reviews/T2/attempt-1.md`.
+
+Verified by execution, not by reading the handoff: 88 tests against a real PostgreSQL cluster;
+the PostgreSQL test skips visibly without one rather than passing empty; its row lock is
+load-bearing (removing `with_for_update()` fails it); and the suite was mutation-checked —
+dropping the cross-student grant requirement fails 2 tests, smuggling free text into a channel
+summary fails 9.
+
+**Two limits T2 disclosed that later tasks must carry:**
+
+- A signed human-kind claim is **not** proof of a human ceremony unless the token issuer
+  enforces it. The entire consent model rests on that issuer. T7 should test the boundary.
+- No live Redis, no real Discord, no live vLLM — fakeredis, unit-tested permission maths, mock
+  HTTP transports. **T9 makes the Discord half real.**
+
+**`backend/.venv` is gitignored** and lives in whichever worktree created it. Set it up per
+`backend/README.md` before running the backend suite from a new worktree.
 
 ## T3 — GPU inference setup
 
