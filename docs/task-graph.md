@@ -81,7 +81,7 @@ the Track 2 agent-to-agent message, and the Track 3 group-chat payload. The back
 | T0b | **Track 1 Cubbie Skill** (build) | 1 | Orchestrator | Claude Code | T0 | `REVIEW` |
 | T0c | **Track 1 submission** (publish + submit) | 1 | Orchestrator | Claude Code | T0b + **D2** | `BLOCKED` (D2) |
 | T1 | Architecture & shared contracts | all | Orchestrator | Claude Code | — | `REVIEW_WAIVED` |
-| T2 | Backend implementation | 1·2·3 | Backend Engineer | Codex | T1 | `READY` |
+| T2 | Backend implementation | 1·2·3 | Backend Engineer | Codex | T1 | `REVIEW` |
 | T3 | GPU inference setup (vLLM) | 2·3 | GPU Infra Engineer | Codex | T1 | `READY` |
 | T4 | ML evaluation baseline | 2 | ML Engineer | Claude Code | T1 | `READY` |
 | T5 | Frontend: negotiation visualisation | 2 | Frontend Engineer | Codex | T1 + stable `contracts/` | `BLOCKED` |
