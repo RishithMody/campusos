@@ -91,6 +91,16 @@ is_impl_task() {
 
 field() { echo "$1" | awk -v i="$2" '{print $i}'; }
 
+# Count existing files from a glob. An unmatched glob stays literal and fails -f, so this
+# returns 0 without a pipeline -- `ls <glob> | wc -l` fails under `set -o pipefail`.
+count_files() {
+  local n=0 f
+  for f in "$@"; do
+    [ -f "$f" ] && n=$((n + 1)) || true
+  done
+  echo "$n"
+}
+
 resolve_role() {
   local r="$1"
   role_meta "$r" >/dev/null 2>&1 || die "unknown role '$r'. Known roles: $ALL_ROLES"
@@ -257,7 +267,7 @@ cmd_status() {
     printf '    commits     %s ahead / %s behind %s\n' "$ahead" "$behind" "$BASE_BRANCH"
     printf '    last commit %s\n' "$last"
 
-    reviews="$(ls "$REPO_ROOT/docs/agents/reviews/$t"/attempt-*.md 2>/dev/null | wc -l | tr -d ' ')"
+    reviews="$(count_files "$REPO_ROOT/docs/agents/reviews/$t"/attempt-*.md)"
     esc="$REPO_ROOT/docs/agents/reviews/$t/ESCALATION.md"
     if [ -f "$esc" ]; then
       printf '    %sreview      ESCALATED — human decision required%s\n' "$RED" "$N"
@@ -268,10 +278,10 @@ cmd_status() {
   [ "$any" -eq 0 ] && info "$DIM  (no task worktrees yet)$N" || true
 
   hdr "Recent handoffs"
-  if ls "$REPO_ROOT/docs/agents/handoffs"/*.md >/dev/null 2>&1; then
-    ls -t "$REPO_ROOT/docs/agents/handoffs"/*.md | grep -v TEMPLATE | head -5 | while read -r f; do
-      info "  $(basename "$f")"
-    done
+  local recent
+  recent="$(ls -t "$REPO_ROOT/docs/agents/handoffs"/*.md 2>/dev/null | grep -v TEMPLATE | head -5 || true)"
+  if [ -n "$recent" ]; then
+    printf '%s\n' "$recent" | while read -r f; do info "  $(basename "$f")"; done
   else
     info "$DIM  (none)$N"
   fi
@@ -363,6 +373,22 @@ EOP
 launch_cli() {
   local cli="$1" wt="$2" name="$3" prompt="$4"
   require_cli "$cli"
+
+  if [ -n "${CAMPUSOS_DRY_RUN:-}" ]; then
+    hdr "DRY RUN — nothing was launched"
+    info "  cli:      $cli"
+    info "  session:  $name"
+    info "  worktree: $wt"
+    if [ "$cli" = "claude" ]; then
+      info "  command:  claude --name '$name'${CLAUDE_PERMISSION_MODE:+ --permission-mode $CLAUDE_PERMISSION_MODE} '<prompt>'"
+    else
+      info "  command:  codex --sandbox $CODEX_SANDBOX '<prompt>'"
+    fi
+    hdr "Prompt the agent would receive"
+    printf '%s\n' "$prompt"
+    return 0
+  fi
+
   hdr "Launching $cli"
   info "  session:  $name"
   info "  worktree: $wt"
@@ -460,8 +486,13 @@ a review of an uncommitted tree cannot be reproduced."
   # detectable after the merge commit exists (see .githooks/post-merge).
   local foreign="" other
   for other in $(git -C "$wt" for-each-ref --format='%(refname:short)' refs/heads/task/ 2>/dev/null); do
-    if [ "$other" != "$branch" ] \
-       && git -C "$wt" merge-base --is-ancestor "refs/heads/$other" HEAD 2>/dev/null; then
+    # A branch with no commits of its own still points at the base branch, so it is
+    # trivially an ancestor of everything. Nothing to absorb -- skip it.
+    if [ "$other" = "$branch" ] \
+       || git -C "$wt" merge-base --is-ancestor "refs/heads/$other" "refs/heads/$BASE_BRANCH" 2>/dev/null; then
+      continue
+    fi
+    if git -C "$wt" merge-base --is-ancestor "refs/heads/$other" HEAD 2>/dev/null; then
       foreign="$foreign  $other"$'\n'
     fi
   done
@@ -482,7 +513,7 @@ If it genuinely needs that work, the Orchestrator sequences the tasks instead."
   local rdir="$REPO_ROOT/docs/agents/reviews/$task"
   mkdir -p "$rdir"
   local prior attempt
-  prior="$(ls "$rdir"/attempt-*.md 2>/dev/null | wc -l | tr -d ' ')"
+  prior="$(count_files "$rdir"/attempt-*.md)"
   attempt=$((prior + 1))
 
   if [ -f "$rdir/ESCALATION.md" ]; then
@@ -783,6 +814,7 @@ ${B}ENVIRONMENT${N}
   CAMPUSOS_CLAUDE_PERMISSION_MODE  claude --permission-mode (default: your own setting)
   CAMPUSOS_ALLOW_BLOCKED=1         deliberately start a BLOCKED task
   CAMPUSOS_ALLOW_OVER_LIMIT=1      deliberately exceed ${MAX_IMPL_AGENTS} implementation agents
+  CAMPUSOS_DRY_RUN=1               print the resolved command and prompt, launch nothing
 
 ${B}WHAT THIS SCRIPT WILL NOT DO${N}
   - merge or push to ${BASE_BRANCH}            (human decision; git hooks also enforce it)

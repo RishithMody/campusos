@@ -220,10 +220,14 @@ One role can hold several tasks — pass a task ID for a task-specific branch:
 Useful environment overrides:
 
 ```bash
+CAMPUSOS_DRY_RUN=1 ./scripts/agents.sh start backend                  # show the command + prompt, launch nothing
 CAMPUSOS_CODEX_SANDBOX=read-only ./scripts/agents.sh review backend   # read-only reviewer
 CAMPUSOS_ALLOW_BLOCKED=1 ./scripts/agents.sh create ml T6             # start a BLOCKED task on purpose
 CAMPUSOS_ALLOW_OVER_LIMIT=1 ./scripts/agents.sh create frontend       # exceed 3 agents on purpose
 ```
+
+`CAMPUSOS_DRY_RUN=1` is the quickest way to see exactly what context an agent will get
+before you spend a session on it.
 
 ---
 
@@ -273,4 +277,5 @@ No agent — including the Orchestrator — may write this token. Full rules:
 | `cleanup` refuses — uncommitted changes | Deliberate. Commit or discard yourself; the script will not delete your work. |
 | Branch survives `cleanup` | It was not merged into `main`. The script never force-deletes. Delete it by hand if you are sure. |
 | `git worktree` says a path is already registered but the directory is gone | `git -C ~/campusos worktree prune` |
+| `You merged work that is not yours` | An agent merged another task branch. It must `git reset --hard HEAD@{1}`. `review` refuses that branch until it does. |
 | An agent claims tests pass but they don't | This is the failure mode to watch for. Always check the handoff's pasted output against a real run. Report it to the reviewer as a finding. |
