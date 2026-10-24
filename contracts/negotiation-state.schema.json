@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://campusos.dev/contracts/v1/negotiation-state.schema.json",
+  "title": "Negotiation state (v1)",
+  "description": "The LangGraph state for one negotiation, and the thing the frontend renders live. This is a product surface, not an implementation detail: T5 draws it and T9 summarises it into a group chat, so it is designed to be read by a person, serialised, and versioned. Everything in it is already disclosure-filtered -- the state a given viewer receives never contains more than that viewer is entitled to see.",
+  "type": "object",
+  "required": ["schema_version", "negotiation_id", "trace_id", "status", "round", "max_rounds", "participants", "updated_at"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "negotiation_id": { "type": "string", "pattern": "^neg_[A-Za-z0-9]{16,64}$" },
+    "trace_id": { "type": "string", "pattern": "^trc_[A-Za-z0-9]{16,64}$" },
+    "status": {
+      "description": "gathering: collecting availability. negotiating: agents exchanging proposals. awaiting_approval: a time is on the table and the humans must confirm. converged: agreed and confirmed. failed: no agreement within max_rounds. expired: ran past its deadline. cancelled: a participant withdrew. failed and expired are normal product outcomes that the UI must show honestly, not errors to hide.",
+      "enum": ["gathering", "negotiating", "awaiting_approval", "converged", "failed", "expired", "cancelled"]
+    },
+    "round": { "type": "integer", "minimum": 0 },
+    "max_rounds": {
+      "description": "The bound on the negotiation loop. Required, and enforced: an unbounded agent loop is both a cost risk and a way for a disagreement to never surface to the humans who could resolve it.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 20
+    },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "participants": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 12,
+      "items": {
+        "type": "object",
+        "required": ["student_ref", "agent_id", "state"],
+        "additionalProperties": false,
+        "properties": {
+          "student_ref": { "type": "string", "pattern": "^stu_[A-Za-z0-9]{16,64}$" },
+          "display_name": {
+            "description": "A chosen nickname for the UI. Optional, never derived from an email or legal name, and absent for a participant who has not agreed to be named.",
+            "type": "string",
+            "maxLength": 40
+          },
+          "agent_id": { "type": "string", "pattern": "^agt_[A-Za-z0-9]{16,64}$" },
+          "state": { "enum": ["invited", "shared_availability", "proposed", "accepted", "declined", "timed_out"] },
+          "disclosure_level": { "enum": ["none", "free_busy", "category", "full"] }
+        }
+      }
+    },
+    "proposals": {
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+        "type": "object",
+        "required": ["proposal_id", "slot", "proposed_by", "votes"],
+        "additionalProperties": false,
+        "properties": {
+          "proposal_id": { "type": "string", "pattern": "^prp_[A-Za-z0-9]{8,64}$" },
+          "slot": {
+            "type": "object",
+            "required": ["start", "end"],
+            "additionalProperties": false,
+            "properties": {
+              "start": { "type": "string", "format": "date-time" },
+              "end": { "type": "string", "format": "date-time" }
+            }
+          },
+          "proposed_by": { "type": "string", "pattern": "^agt_[A-Za-z0-9]{16,64}$" },
+          "votes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["student_ref", "vote"],
+              "additionalProperties": false,
+              "properties": {
+                "student_ref": { "type": "string", "pattern": "^stu_[A-Za-z0-9]{16,64}$" },
+                "vote": { "enum": ["accept", "reject", "abstain"] },
+                "reason_code": { "enum": ["conflict", "outside_preferred_hours", "too_short", "no_overlap", "needs_human", "expired", "insufficient_authority"] }
+              }
+            }
+          }
+        }
+      }
+    },
+    "transcript": {
+      "description": "The audit trail the UI renders: what each agent said, and crucially what it DISCLOSED. Showing the student what was revealed on their behalf is a product requirement, not a debug view.",
+      "type": "array",
+      "maxItems": 200,
+      "items": {
+        "type": "object",
+        "required": ["at", "agent_id", "intent", "disclosure_level"],
+        "additionalProperties": false,
+        "properties": {
+          "at": { "type": "string", "format": "date-time" },
+          "agent_id": { "type": "string", "pattern": "^agt_[A-Za-z0-9]{16,64}$" },
+          "intent": { "enum": ["propose", "counter", "accept", "reject", "escalate"] },
+          "disclosure_level": { "enum": ["none", "free_busy", "category", "full"] },
+          "reason_code": { "enum": ["conflict", "outside_preferred_hours", "too_short", "no_overlap", "needs_human", "expired", "insufficient_authority"] },
+          "message_id": { "type": "string", "pattern": "^msg_[A-Za-z0-9]{16,64}$" }
+        }
+      }
+    },
+    "outcome": {
+      "type": "object",
+      "required": ["kind"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "enum": ["agreed", "no_overlap", "max_rounds_exceeded", "timed_out", "withdrawn"] },
+        "agreed_slot": {
+          "type": "object",
+          "required": ["start", "end"],
+          "additionalProperties": false,
+          "properties": {
+            "start": { "type": "string", "format": "date-time" },
+            "end": { "type": "string", "format": "date-time" }
+          }
+        },
+        "requires_human_approval": { "type": "boolean" }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "$comment": "A converged negotiation must say what was agreed; a status with no outcome is unrenderable.",
+      "if": { "properties": { "status": { "const": "converged" } }, "required": ["status"] },
+      "then": {
+        "required": ["outcome"],
+        "properties": { "outcome": { "required": ["kind", "agreed_slot"], "properties": { "kind": { "const": "agreed" } } } }
+      }
+    },
+    {
+      "$comment": "Failure is a product outcome and must explain itself.",
+      "if": { "properties": { "status": { "const": "failed" } }, "required": ["status"] },
+      "then": { "required": ["outcome"] }
+    }
+  ]
+}

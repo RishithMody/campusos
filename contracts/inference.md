@@ -1,0 +1,105 @@
+# Inference interface (v1)
+
+**Status:** frozen contract. T2 (backend) and T4 (ML) both code against this; T3 (GPU infra)
+implements the vLLM side. Changes go through the Orchestrator.
+
+The one rule: **the mock and vLLM are drop-in replacements for each other.** Phase 1 of this
+project is three agents negotiating with no GPU at all, and the demo must survive the cluster
+being unavailable mid-presentation. If any caller can tell which implementation it is talking
+to — by timing, by error shape, by a field that only one of them sets — that property is broken.
+
+## The interface
+
+```python
+class InferenceClient(Protocol):
+    async def complete(self, request: CompletionRequest) -> CompletionResponse: ...
+    async def health(self) -> HealthReport: ...
+```
+
+Callers depend on this Protocol only. No caller imports a concrete client, constructs a URL, or
+reads an inference environment variable: the client is injected. A hardcoded endpoint anywhere
+above this boundary is a bug.
+
+### CompletionRequest
+
+| Field | Type | Notes |
+|---|---|---|
+| `messages` | `list[Message]` | `Message = {role: "system"\|"user"\|"assistant", content: str}` |
+| `max_tokens` | `int` | Required. No implicit default — an unbounded generation is a cost and latency risk. |
+| `temperature` | `float` | Required, `0.0`–`2.0`. State it; do not inherit a server default. |
+| `seed` | `int \| None` | Set it for anything that must be reproducible. T4's evaluation always sets it. |
+| `response_schema` | `dict \| None` | JSON Schema. When present the response **must** be valid against it. |
+| `trace_id` | `str` | Propagated into logs so a generation can be tied to its negotiation. |
+| `timeout_s` | `float` | Required. The caller owns the deadline, not the server. |
+
+### CompletionResponse
+
+| Field | Type | Notes |
+|---|---|---|
+| `text` | `str` | The completion. |
+| `parsed` | `dict \| None` | Populated when `response_schema` was given and parsing succeeded. |
+| `finish_reason` | `"stop" \| "length" \| "schema_retry_exhausted" \| "timeout"` | |
+| `usage` | `Usage` | `{prompt_tokens, completion_tokens}`. The mock reports plausible counts, not zeros. |
+| `model` | `str` | e.g. `qwen3-8b` or `mock-v1`. For logging only — **never** branch on it. |
+| `latency_ms` | `float` | Measured, not estimated. |
+
+### HealthReport
+
+`{healthy: bool, model: str, detail: str}`. A down endpoint reports `healthy=False`; it does not
+raise. T3's health-check test asserts exactly this.
+
+## Errors
+
+One exception hierarchy, raised identically by both implementations:
+
+| Exception | When | Retryable |
+|---|---|---|
+| `InferenceTimeout` | Deadline passed | yes |
+| `InferenceUnavailable` | Cannot reach the backend, or it is unhealthy | yes |
+| `InferenceSchemaError` | Output never matched `response_schema` after retries | no |
+| `InferenceRejected` | Request malformed or over a hard limit | no |
+
+A caller that handles these four handles every implementation. Callers must degrade, not crash:
+if inference is unavailable mid-negotiation, the negotiation **escalates to the human** rather
+than guessing. That is a product behaviour, not an error path.
+
+## Structured output
+
+When `response_schema` is set, the client retries internally up to **3** times, then raises
+`InferenceSchemaError`. Both implementations validate before returning, so a caller never has to
+re-validate. Negotiation messages are generated this way against
+`agent-protocol.schema.json` — the model proposes, the schema disposes.
+
+## Privacy obligations at this boundary
+
+- **Never put raw calendar entries, event titles, locations, names or emails in a prompt.** The
+  prompt receives the already-disclosure-filtered availability envelope, nothing richer. Filter
+  before the prompt, not after the completion.
+- Log `trace_id`, token counts and latency. **Never log prompt or completion text** in any
+  default configuration: these contain student schedule data.
+- The mock must be as privacy-safe as the real one; it is used in CI, where output is retained.
+
+## The mock
+
+Lives behind the same Protocol, ships with the backend, and is the default in development and
+CI. It must be:
+
+- **Deterministic** for a given `seed`. T4's reproducibility depends on it.
+- **Schema-correct**: when `response_schema` is set, it returns conforming output.
+- **Capable of failing on demand**, so timeout, unavailability and schema-exhaustion paths are
+  testable without a GPU.
+- **Plausibly slow** — a configurable small delay. A zero-latency mock hides race conditions that
+  then appear for the first time on stage.
+
+## The vLLM implementation (T3)
+
+OpenAI-compatible API, Qwen3 8B, from committed config. Binding, `max_num_seqs ≤ 256`, teardown
+and benchmark requirements are T3's, in `docs/task-graph.md` and `docs/infra-policy.md`.
+
+**It is never the public internet-facing host.** Cubbie's sandbox cannot reach an SSH-tunnelled
+endpoint, so if a Skill ever needs the platform it calls a CPU-only API gateway that holds the
+disclosure logic, and that gateway reaches inference privately. See `docs/adr/0001`.
+
+Selection is by environment: `CAMPUSOS_INFERENCE=mock|vllm`, with `mock` the default. A missing
+or unparseable value is a startup error, not a silent fallback — "it was secretly on the mock"
+is a result-invalidating failure for T4.

@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://campusos.dev/contracts/v1/availability.schema.json",
+  "title": "Availability envelope (v1)",
+  "description": "What one student's agent is permitted to say about when that student is free. This is the single disclosure-controlled payload shared by all three tracks: it is the Cubbie Skill's output (Track 1), the body of an agent-to-agent proposal (Track 2), and what the group-chat assistant posts (Track 3). The schema itself refuses over-disclosure: fields above the stated disclosure_level are rejected rather than merely discouraged, so a client bug cannot become a privacy breach.",
+  "type": "object",
+  "required": ["schema_version", "student_ref", "generated_at", "timezone", "window", "disclosure_level", "slots"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "description": "Additive versioning. A consumer that does not recognise the major version must refuse the envelope rather than guess.",
+      "const": "1.0"
+    },
+    "student_ref": {
+      "description": "Opaque, per-negotiation pseudonym for the student. NEVER a name, email, student number, or any identifier that is stable across negotiations: a stable id lets a recipient join two negotiations together and rebuild a calendar the student never agreed to share.",
+      "type": "string",
+      "pattern": "^stu_[A-Za-z0-9]{16,64}$"
+    },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "timezone": {
+      "description": "IANA zone of the student's local time, e.g. America/Phoenix. Required because the agent sandbox clock may be in another zone.",
+      "type": "string",
+      "minLength": 3
+    },
+    "window": {
+      "description": "The period this envelope describes. Silence outside the window means 'not asked', never 'free'.",
+      "type": "object",
+      "required": ["start", "end"],
+      "additionalProperties": false,
+      "properties": {
+        "start": { "type": "string", "format": "date-time" },
+        "end": { "type": "string", "format": "date-time" }
+      }
+    },
+    "disclosure_level": {
+      "description": "The ceiling on what this envelope may contain. Defined in docs/architecture.md and enforced here. none: no times at all, the agent may only answer yes/no to a specific proposed time. free_busy: intervals marked busy or free, with no reason, label, location or participants. category: free_busy plus a coarse, deliberately non-sensitive category. full: adds a human-readable label, and requires an explicit, logged, scoped grant from the student.",
+      "enum": ["none", "free_busy", "category", "full"]
+    },
+    "slots": {
+      "type": "array",
+      "maxItems": 500,
+      "items": {
+        "type": "object",
+        "required": ["start", "end", "state"],
+        "additionalProperties": false,
+        "properties": {
+          "start": { "type": "string", "format": "date-time" },
+          "end": { "type": "string", "format": "date-time" },
+          "state": { "enum": ["busy", "free", "tentative"] },
+          "category": {
+            "description": "Coarse bucket, permitted only at category or full. The enum is deliberately blunt: 'personal' absorbs health, therapy, family and everything else private. Never extend this with medical, health, religious or similar values -- a category that identifies why someone is unavailable defeats the entire point of the ladder.",
+            "enum": ["academic", "work", "social", "personal"]
+          },
+          "label": {
+            "description": "Human-readable text, permitted only at full. This is the one field that can leak 'therapy at 2pm', so it exists only behind an explicit grant.",
+            "type": "string",
+            "maxLength": 120
+          }
+        }
+      }
+    },
+    "constraints": {
+      "description": "Preferences the agent may negotiate within. Soft, and they reveal habits, so keep them coarse.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "earliest_hour": { "type": "integer", "minimum": 0, "maximum": 23 },
+        "latest_hour": { "type": "integer", "minimum": 0, "maximum": 23 },
+        "min_duration_minutes": { "type": "integer", "minimum": 5, "maximum": 1440 }
+      }
+    },
+    "redactions": {
+      "description": "How many items were withheld to satisfy the disclosure level. The recipient learns that something was withheld, never what. Honesty about the existence of redaction is what stops 'minimum disclosure' being indistinguishable from 'nothing to hide'.",
+      "type": "integer",
+      "minimum": 0
+    }
+  },
+  "allOf": [
+    {
+      "$comment": "none: no intervals may be enumerated at all.",
+      "if": { "properties": { "disclosure_level": { "const": "none" } }, "required": ["disclosure_level"] },
+      "then": { "properties": { "slots": { "maxItems": 0 } } }
+    },
+    {
+      "$comment": "free_busy: intervals only. No category, no label.",
+      "if": { "properties": { "disclosure_level": { "const": "free_busy" } }, "required": ["disclosure_level"] },
+      "then": {
+        "properties": {
+          "slots": {
+            "items": { "not": { "anyOf": [ { "required": ["category"] }, { "required": ["label"] } ] } }
+          }
+        }
+      }
+    },
+    {
+      "$comment": "category: a coarse bucket is allowed, free text is not.",
+      "if": { "properties": { "disclosure_level": { "const": "category" } }, "required": ["disclosure_level"] },
+      "then": { "properties": { "slots": { "items": { "not": { "required": ["label"] } } } } }
+    }
+  ]
+}

@@ -1,0 +1,310 @@
+openapi: 3.1.0
+info:
+  title: CampusOS API
+  version: "1.0.0"
+  description: |
+    The REST surface between the CampusOS backend and its three clients: the Next.js frontend
+    (Track 2 visualisation), the Discord group-chat assistant (Track 3), and a Cubbie Skill
+    script (Track 1, if it ever calls us).
+
+    Two rules hold on every path, without exception:
+
+    1. **Identity comes from the validated bearer token, never from the request.** No path takes
+       a student id as a parameter or body field to decide *who you are*. A `student_ref` in a
+       URL identifies a subject to read, and reading another student's subject requires an
+       explicit grant; it never establishes the caller.
+    2. **Disclosure is applied server-side, on egress.** A response never contains more than the
+       caller's disclosure level permits, regardless of what the caller asks for. Clients render
+       what they are given; they are not trusted to filter.
+
+    Cubbie's sandbox allows outbound HTTPS on port 443 only, and cannot reach a server started
+    inside it. Any Skill-facing deployment is therefore a public HTTPS host. The vLLM endpoint is
+    never that host: see docs/adr/0001.
+servers:
+  - url: https://api.campusos.dev/v1
+    description: Production. Versioned in the path so a later change cannot break agents mid-flight.
+  - url: http://localhost:8000/v1
+    description: Local development, mock inference, no GPU.
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: health
+  - name: availability
+  - name: negotiations
+  - name: approvals
+  - name: grants
+
+paths:
+  /health:
+    get:
+      tags: [health]
+      summary: Liveness probe
+      security: []
+      responses:
+        "200":
+          description: Service is up
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, enum: [ok] }
+                  version: { type: string }
+
+  /me/availability:
+    put:
+      tags: [availability]
+      summary: Publish the calling student's availability envelope
+      description: |
+        The caller submits their own availability, already reduced to the disclosure level they
+        chose. The server re-applies the ceiling from the student's standing preference and
+        rejects anything above it, rather than trusting the client to have filtered correctly.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Availability" }
+      responses:
+        "204": { description: Stored }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/DisclosureViolation" }
+
+  /negotiations:
+    post:
+      tags: [negotiations]
+      summary: Start a negotiation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [participants, window, max_rounds]
+              additionalProperties: false
+              properties:
+                participants:
+                  type: array
+                  minItems: 2
+                  maxItems: 12
+                  items: { type: string, pattern: "^stu_[A-Za-z0-9]{16,64}$" }
+                window:
+                  type: object
+                  required: [start, end]
+                  additionalProperties: false
+                  properties:
+                    start: { type: string, format: date-time }
+                    end: { type: string, format: date-time }
+                max_rounds: { type: integer, minimum: 1, maximum: 20 }
+                min_duration_minutes: { type: integer, minimum: 5, maximum: 1440 }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NegotiationState" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /negotiations/{negotiation_id}:
+    parameters:
+      - name: negotiation_id
+        in: path
+        required: true
+        schema: { type: string, pattern: "^neg_[A-Za-z0-9]{16,64}$" }
+    get:
+      tags: [negotiations]
+      summary: Read negotiation state, filtered to the caller
+      description: |
+        Returns the state as this caller is permitted to see it. Two participants requesting the
+        same negotiation can legitimately receive different documents.
+      responses:
+        "200":
+          description: Current state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NegotiationState" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /negotiations/{negotiation_id}/messages:
+    parameters:
+      - name: negotiation_id
+        in: path
+        required: true
+        schema: { type: string, pattern: "^neg_[A-Za-z0-9]{16,64}$" }
+    post:
+      tags: [negotiations]
+      summary: Submit an agent-to-agent message
+      description: |
+        A malformed envelope is rejected with a structured 400, never a 500. An envelope whose
+        intent is outside its scope, or whose scope has expired, is a 403.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AgentMessage" }
+      responses:
+        "202":
+          description: Accepted and routed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NegotiationState" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/DisclosureViolation" }
+
+  /negotiations/{negotiation_id}/stream:
+    parameters:
+      - name: negotiation_id
+        in: path
+        required: true
+        schema: { type: string, pattern: "^neg_[A-Za-z0-9]{16,64}$" }
+    get:
+      tags: [negotiations]
+      summary: Server-sent stream of filtered state updates
+      description: Each event is a full NegotiationState document, filtered for this caller.
+      responses:
+        "200":
+          description: text/event-stream of NegotiationState documents
+          content:
+            text/event-stream:
+              schema: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /approvals/{approval_id}:
+    parameters:
+      - name: approval_id
+        in: path
+        required: true
+        schema: { type: string, pattern: "^apr_[A-Za-z0-9]{8,64}$" }
+    post:
+      tags: [approvals]
+      summary: The student confirms or declines on their own behalf
+      description: |
+        An agent can never supply this. Anything that books, sends or commits passes through here
+        first, and the response states exactly what will be revealed if the student accepts.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              additionalProperties: false
+              properties:
+                decision: { type: string, enum: [approve, decline] }
+      responses:
+        "200":
+          description: Recorded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NegotiationState" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Already decided
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  /grants:
+    post:
+      tags: [grants]
+      summary: Grant another student's agent scoped, expiring access
+      description: |
+        The only way cross-student reads happen. Every grant is explicit, scoped to one
+        negotiation, time-limited, and written to the audit log. There is no implicit sharing.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [negotiation_id, grantee_agent_id, max_disclosure_level, expires_at]
+              additionalProperties: false
+              properties:
+                negotiation_id: { type: string, pattern: "^neg_[A-Za-z0-9]{16,64}$" }
+                grantee_agent_id: { type: string, pattern: "^agt_[A-Za-z0-9]{16,64}$" }
+                max_disclosure_level: { type: string, enum: [none, free_busy, category, full] }
+                expires_at: { type: string, format: date-time }
+      responses:
+        "201":
+          description: Granted and audited
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [grant_id, expires_at]
+                properties:
+                  grant_id: { type: string }
+                  expires_at: { type: string, format: date-time }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Identity is derived from this token and from nothing else. No endpoint accepts a
+        client-supplied user id as proof of who the caller is.
+
+  schemas:
+    Availability:
+      $ref: "https://campusos.dev/contracts/v1/availability.schema.json"
+    AgentMessage:
+      $ref: "https://campusos.dev/contracts/v1/agent-protocol.schema.json"
+    NegotiationState:
+      $ref: "https://campusos.dev/contracts/v1/negotiation-state.schema.json"
+    Problem:
+      type: object
+      description: RFC 9457 problem details. Never contains private data or a secret.
+      required: [type, title, status]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        trace_id: { type: string }
+
+  responses:
+    BadRequest:
+      description: Malformed request or envelope. Structured, never a 500.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    Unauthorized:
+      description: Missing or invalid token.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    Forbidden:
+      description: |
+        Authenticated but not permitted: no grant, scope expired, or intent outside scope.
+        The body never reveals whether the resource exists.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    NotFound:
+      description: No such resource, or the caller may not know it exists.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    DisclosureViolation:
+      description: |
+        The payload exceeds the disclosure level in force. Returned instead of silently
+        redacting, so that an over-disclosing client is a loud failure in tests rather than a
+        quiet leak in production.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }

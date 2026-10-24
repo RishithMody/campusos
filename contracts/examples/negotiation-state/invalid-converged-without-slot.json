@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0",
+  "negotiation_id": "neg_Nn1Mm2Bb3Vv4Cc5X",
+  "trace_id": "trc_Z9y8X7w6V5u4T3s2",
+  "status": "converged",
+  "round": 3,
+  "max_rounds": 8,
+  "updated_at": "2026-10-24T18:30:00Z",
+  "participants": [
+    { "student_ref": "stu_7Kp2Qm9Xr4Lt8Vn3", "agent_id": "agt_Qq1Ww2Ee3Rr4Tt5Y", "state": "accepted" },
+    { "student_ref": "stu_Zq8Wd3Ye6Hs1Bn5K", "agent_id": "agt_Aa1Ss2Dd3Ff4Gg5H", "state": "accepted" }
+  ],
+  "outcome": { "kind": "agreed" }
+}

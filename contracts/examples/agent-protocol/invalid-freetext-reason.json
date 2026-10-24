@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.0",
+  "message_id": "msg_S1t2U3v4W5x6Y7z8",
+  "trace_id": "trc_Z9y8X7w6V5u4T3s2",
+  "issued_at": "2026-10-24T18:12:00Z",
+  "sender": { "agent_id": "agt_Qq1Ww2Ee3Rr4Tt5Y", "agent_version": "1.0.0" },
+  "represented_student": { "student_ref": "stu_7Kp2Qm9Xr4Lt8Vn3" },
+  "scope": { "negotiation_id": "neg_Nn1Mm2Bb3Vv4Cc5X", "actions": ["reject"], "expires_at": "2026-10-25T18:00:00Z" },
+  "disclosure_level": "free_busy",
+  "intent": "reject",
+  "payload": { "reason_code": "therapy appointment at 2pm" }
+}
