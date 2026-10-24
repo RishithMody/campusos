@@ -706,7 +706,8 @@ cmd_handoff() {
 
 # ------------------------------------------------------------------ cmd: doctor
 
-# The contract validator needs PyYAML and jsonschema. They live in the primary worktree's
+# The contract validator needs PyYAML, jsonschema and openapi-spec-validator. They live in
+# the primary worktree's
 # gitignored .venv, which every agent worktree shares.
 venv_python() {
   local primary; primary="$(dirname "$(git -C "$REPO_ROOT" rev-parse --path-format=absolute --git-common-dir)")"
@@ -777,11 +778,14 @@ cmd_doctor() {
   local vpy
   if vpy="$(venv_python)"; then
     ok "python venv: ${vpy#$REPO_ROOT/}"
-    if "$vpy" -c "import yaml, jsonschema" 2>/dev/null; then
-      ok "PyYAML and jsonschema installed"
+    # Check every package the validator imports, not a subset. A doctor that reports a
+    # healthy environment while one dependency is missing is the same fail-open the
+    # validator itself was fixed to avoid.
+    if "$vpy" -c "import yaml, jsonschema, openapi_spec_validator" 2>/dev/null; then
+      ok "PyYAML, jsonschema and openapi-spec-validator installed"
     else
-      warn "venv is missing PyYAML or jsonschema — validate_contracts.py will FAIL, not skip"
-      info "  uv pip install --python \"$vpy\" pyyaml jsonschema"
+      warn "venv is missing a validator dependency — validate_contracts.py will FAIL, not skip"
+      info "  uv pip install --python \"$vpy\" pyyaml jsonschema openapi-spec-validator"
       fail=1
     fi
   else
