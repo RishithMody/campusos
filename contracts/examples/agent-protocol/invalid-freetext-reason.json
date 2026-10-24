@@ -1,12 +1,32 @@
 {
   "schema_version": "1.0",
-  "message_id": "msg_S1t2U3v4W5x6Y7z8",
+  "message_id": "msg_A1b2C3d4E5f6G7h8",
   "trace_id": "trc_Z9y8X7w6V5u4T3s2",
-  "issued_at": "2026-10-24T18:12:00Z",
-  "sender": { "agent_id": "agt_Qq1Ww2Ee3Rr4Tt5Y", "agent_version": "1.0.0" },
-  "represented_student": { "student_ref": "stu_7Kp2Qm9Xr4Lt8Vn3" },
-  "scope": { "negotiation_id": "neg_Nn1Mm2Bb3Vv4Cc5X", "actions": ["reject"], "expires_at": "2026-10-25T18:00:00Z" },
+  "issued_at": "2026-10-24T18:05:00Z",
+  "sender": {
+    "agent_id": "agt_Qq1Ww2Ee3Rr4Tt5Y",
+    "agent_version": "1.0.0"
+  },
+  "represented_student": {
+    "student_ref": "stu_7Kp2Qm9Xr4Lt8Vn3"
+  },
+  "scope": {
+    "negotiation_id": "neg_Nn1Mm2Bb3Vv4Cc5X",
+    "actions": [
+      "propose",
+      "counter",
+      "accept",
+      "reject",
+      "escalate"
+    ],
+    "expires_at": "2026-10-25T18:00:00Z",
+    "max_disclosure_level": "free_busy",
+    "granted_by": "per_negotiation"
+  },
   "disclosure_level": "free_busy",
   "intent": "reject",
-  "payload": { "reason_code": "therapy appointment at 2pm" }
+  "payload": {
+    "reason_code": "therapy appointment at 2pm"
+  },
+  "in_reply_to": "msg_B2c3D4e5F6g7H8i9"
 }

@@ -30,7 +30,7 @@
     "viewer": {
       "description": "Who the caller is inside this negotiation. Every other identifier here is a per-negotiation pseudonym, so without this a participant cannot pick itself out of the participants array -- it has no way to learn its own stu_ ref, which it needs to submit availability and to read its own approvals. Server-set; echoing a client-supplied value here would make the whole identity model client-controlled.",
       "type": "object",
-      "required": ["student_ref", "agent_id", "max_disclosure_level"],
+      "required": ["student_ref", "agent_id", "max_disclosure_level", "awaiting_me"],
       "additionalProperties": false,
       "properties": {
         "student_ref": { "type": "string", "pattern": "^stu_[A-Za-z0-9]{16,64}$" },
@@ -38,6 +38,14 @@
         "max_disclosure_level": {
           "description": "The ceiling in force for this viewer in this negotiation. The UI uses it to show the student what their agent is allowed to reveal, before it reveals it.",
           "enum": ["none", "free_busy", "category", "full"]
+        },
+        "awaiting_me": {
+          "description": "Whether THIS viewer still has something to decide. Distinct from status: `awaiting_approval` is a property of the negotiation, `awaiting_me` is a property of the reader. Once Ana approves and Ben has not, the negotiation is still awaiting_approval and Ana is done -- the two must be separable, or Ana's own client cannot render the state it just created by approving.",
+          "type": "boolean"
+        },
+        "state": {
+          "description": "This viewer's own participation state, mirrored from participants[] so a client does not have to find itself in the array to know where it stands.",
+          "enum": ["invited", "shared_availability", "proposed", "accepted", "declined", "timed_out"]
         }
       }
     },
@@ -163,7 +171,7 @@
           "reason_code": { "enum": ["conflict", "outside_preferred_hours", "too_short", "no_overlap", "needs_human", "expired", "insufficient_authority"] },
           "message_id": { "type": "string", "pattern": "^msg_[A-Za-z0-9]{16,64}$" },
           "disclosed": {
-            "description": "What this message actually revealed, filtered for the viewer reading the transcript. A level alone does not let a student see what was said on their behalf -- 'free_busy' is a category, not a disclosure. For the viewer's own messages this is the full payload their agent sent; for another agent's it is what that agent disclosed to this viewer, and nothing it disclosed to anyone else.",
+            "description": "What this message actually revealed, filtered for the viewer reading the transcript. A level alone does not let a student see what was said on their behalf -- 'free_busy' is a category, not a disclosure. For the viewer's own messages this is the full payload their agent sent; for another agent's it is what that agent disclosed to this viewer, and nothing it disclosed to anyone else.\n\nThe nested availability may not exceed the entry's own disclosure_level, enforced below. This field was added to close a gap in the API surface and reintroduced the exact defect that had just been fixed on the agent envelope: a new carrier for an availability envelope is a new place for the ladder to be bypassed, and the ladder has to travel with the payload rather than being attached to one of its carriers.\n\nThe student's own private explanations are NOT here. note_for_own_student is stripped on egress and never enters the transcript; a student asks their own agent on /me/chat.",
             "type": "object",
             "additionalProperties": false,
             "properties": {
@@ -177,7 +185,10 @@
                   "end": { "type": "string", "format": "date-time" }
                 }
               },
-              "summary": { "type": "string", "maxLength": 280 }
+              "summary_code": {
+                "description": "What this entry says, as a closed vocabulary. NOT prose. The UI renders a sentence from this code plus the structured data already in the entry -- proposed_slot, reason_code, the availability envelope. An arbitrary string here was a hole exactly the size of the one the reason_code enum exists to close: 'Ana has therapy at 2pm' is 23 characters and validates against `type: string` at every disclosure level.",
+                "enum": ["shared_availability", "proposed_slot", "countered_slot", "accepted_slot", "declined_with_reason", "escalated_to_human", "withdrew", "no_disclosure"]
+              }
             }
           }
         }
@@ -204,6 +215,29 @@
   },
   "allOf": [
     {
+      "$comment": "THE LADDER, AGAIN, ON THE TRANSCRIPT. Each entry declares a disclosure_level and may carry a nested availability envelope; the nested level may not exceed the entry's. Written per-entry because JSON Schema cannot compare two values, so this is the same enumeration as in agent-protocol.schema.json applied inside transcript.items. If a third carrier for an availability envelope is ever added, it needs this too.",
+      "properties": {
+        "transcript": {
+          "items": {
+            "allOf": [
+              {
+                "if": { "properties": { "disclosure_level": { "const": "none" } }, "required": ["disclosure_level"] },
+                "then": { "properties": { "disclosed": { "properties": { "availability": { "properties": { "disclosure_level": { "const": "none" } } } } } } }
+              },
+              {
+                "if": { "properties": { "disclosure_level": { "const": "free_busy" } }, "required": ["disclosure_level"] },
+                "then": { "properties": { "disclosed": { "properties": { "availability": { "properties": { "disclosure_level": { "enum": ["none", "free_busy"] } } } } } } }
+              },
+              {
+                "if": { "properties": { "disclosure_level": { "const": "category" } }, "required": ["disclosure_level"] },
+                "then": { "properties": { "disclosed": { "properties": { "availability": { "properties": { "disclosure_level": { "enum": ["none", "free_busy", "category"] } } } } } } }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
       "$comment": "A converged negotiation must say what was agreed; a status with no outcome is unrenderable.",
       "if": { "properties": { "status": { "const": "converged" } }, "required": ["status"] },
       "then": {
@@ -212,9 +246,14 @@
       }
     },
     {
-      "$comment": "A negotiation awaiting approval must say what is awaited, for the viewer being asked. A status of awaiting_approval with nothing pending is unactionable: the UI shows a blocked negotiation and no way to unblock it.",
-      "if": { "properties": { "status": { "const": "awaiting_approval" } }, "required": ["status"] },
+      "$comment": "pending_approvals is viewer-private, so it must be tied to the viewer and not to the global status. The first version of this rule required a non-empty array whenever status was awaiting_approval, which made a perfectly normal state unrepresentable: once Ana approves and Ben has not, the negotiation is still awaiting_approval and Ana's array is correctly empty. Her own client could not render the response her approval produced, and the only ways to satisfy the schema were to fabricate a decision or to show her Ben's -- a schema bug whose least-effort workaround is a privacy breach. viewer.awaiting_me now carries that question.",
+      "if": { "properties": { "viewer": { "properties": { "awaiting_me": { "const": true } }, "required": ["awaiting_me"] } }, "required": ["viewer"] },
       "then": { "required": ["pending_approvals"], "properties": { "pending_approvals": { "minItems": 1 } } }
+    },
+    {
+      "$comment": "And the converse, so the flag cannot drift from the array it describes: nothing to decide means nothing listed. Without this, awaiting_me=false with a populated array would validate, and a UI trusting the flag would silently drop an approval the student owes.",
+      "if": { "properties": { "viewer": { "properties": { "awaiting_me": { "const": false } }, "required": ["awaiting_me"] } }, "required": ["viewer"] },
+      "then": { "properties": { "pending_approvals": { "maxItems": 0 } } }
     },
     {
       "$comment": "Failure is a product outcome and must explain itself.",

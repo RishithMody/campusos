@@ -139,6 +139,18 @@ first version of these contracts showed a `free_busy` message happily carrying a
 availability envelope with a `therapy` label. Every part was internally consistent. The message
 was a disclosure breach.
 
+The ladder travels with the payload, not with one of its carriers. There are two carriers today
+— the agent envelope and `transcript[].disclosed` — and each enforces it independently. That
+redundancy is deliberate: the transcript was added later and reintroduced the exact bypass the
+envelope had just been fixed for, so `scripts/ci/check_disclosure_matrix.py` now sweeps every
+carrier and fails when a schema grows one it does not know about.
+
+Free prose is not permitted alongside a disclosure level anywhere. Transcript entries carry a
+`summary_code` from a closed vocabulary and the UI renders a sentence from it; "Ana has therapy
+at 2pm" is 22 characters and validates against `type: string` at every level in the ladder. The
+student's own private explanations are not in the transcript at all — they ask their own agent
+on `/me/chat`.
+
 ### Two identifiers, opposite lifetimes
 
 | | `contact_handle` (`cnt_`) | `student_ref` (`stu_`) |
@@ -256,6 +268,27 @@ disclosure logic of its own, because B1 says it is just another untrusted client
 filtered for *one participant*, and being allowed to see something is not permission to
 broadcast it to a room that includes people who are not in the negotiation at all.
 
+Consent to post runs in four steps, and each answers a different question:
+
+| Step | Call | Question | Authenticated as |
+|---|---|---|---|
+| 1 | `POST /channels` | Is this a real channel with our bot in it? | the bot |
+| 2 | `POST /channels/{id}/members` | Which student is which Discord user? | **the student** |
+| 3 | `POST /negotiations/{id}/channel-bindings` | May *this* negotiation be discussed in *that* room? | a participant |
+| 4 | `GET .../channel-summary` | — serves only once the binding is `confirmed` | the bot |
+
+Three properties are load-bearing. Step 2 is the student's call and never the bot's: if the bot
+could assert the identity mapping, every consent decision after it would be worthless. Step 3
+raises an ordinary `post_to_channel` approval per participant, so Track 3 adds no second consent
+mechanism — one surface, one place to get it wrong. And step 3 is per negotiation: agreeing once
+to discuss a study session in a room is not agreeing to the next one.
+
+Every participant approves, including one who is not in the channel, because posting reveals
+that they are in the negotiation whether or not they can read the room. If the room later gains
+members the binding flips to `pending_reconsent`, since consent was to an audience and the
+audience changed. Any participant can withdraw afterwards, and one withdrawal ends it for
+everyone: an audience cannot be partially un-told.
+
 ---
 
 ## 8. Known limitations
@@ -270,6 +303,9 @@ broadcast it to a room that includes people who are not in the negotiation at al
   over-disclosures, and that is a real second net, but the primary guarantee is the server-side
   filter on egress and it does not exist until T2. No runtime privacy claim in this document has
   been tested against a running service; T2 and T7 own that evidence.
-- Channel consent is collected once, at registration. A member who joins the Discord channel
-  afterwards is inside an audience they never confirmed. The ceiling is capped at `free_busy` to
-  bound the damage, which mitigates rather than solves it.
+- Channel consent is to an audience *size*, not to a membership list. A room that swaps one
+  member for another keeps the same count and does not trigger re-consent. Growth is caught;
+  substitution is not.
+- `channel-summary.text` is free prose composed server-side, and no schema can check it. It is
+  the one place where a careless sentence reaches a group chat, and it rests entirely on T2's
+  implementation being careful. The `free_busy` ceiling bounds what it has to work with.

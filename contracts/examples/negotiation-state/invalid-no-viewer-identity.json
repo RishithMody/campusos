@@ -83,7 +83,7 @@
           "start": "2026-10-28T18:00:00Z",
           "end": "2026-10-28T19:00:00Z"
         },
-        "summary": "Shared that you are busy Mon 2-4pm, and offered Wed 11am."
+        "summary_code": "shared_availability"
       }
     },
     {
@@ -93,7 +93,7 @@
       "disclosure_level": "none",
       "reason_code": "conflict",
       "disclosed": {
-        "summary": "Declined Wed 11am. Reason sent: conflict."
+        "summary_code": "declined_with_reason"
       }
     },
     {

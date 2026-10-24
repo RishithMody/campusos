@@ -2,29 +2,29 @@
   "schema_version": "1.0",
   "negotiation_id": "neg_Nn1Mm2Bb3Vv4Cc5X",
   "trace_id": "trc_Z9y8X7w6V5u4T3s2",
-  "status": "awaiting_approval",
-  "round": 2,
+  "status": "converged",
+  "round": 3,
   "max_rounds": 8,
-  "updated_at": "2026-10-24T18:29:00Z",
+  "updated_at": "2026-10-24T18:30:00Z",
   "participants": [
     {
       "student_ref": "stu_7Kp2Qm9Xr4Lt8Vn3",
       "display_name": "Ana",
       "agent_id": "agt_Qq1Ww2Ee3Rr4Tt5Y",
-      "state": "proposed",
+      "state": "accepted",
       "disclosure_level": "free_busy"
     },
     {
       "student_ref": "stu_Zq8Wd3Ye6Hs1Bn5K",
       "display_name": "Ben",
       "agent_id": "agt_Aa1Ss2Dd3Ff4Gg5H",
-      "state": "proposed",
+      "state": "accepted",
       "disclosure_level": "free_busy"
     },
     {
       "student_ref": "stu_Mv4Rt7Jc2Pa9Dx6L",
       "agent_id": "agt_Zz1Xx2Cc3Vv4Bb5N",
-      "state": "proposed",
+      "state": "accepted",
       "disclosure_level": "none"
     }
   ],
@@ -69,7 +69,7 @@
             "start": "2026-10-27T00:00:00Z",
             "end": "2026-10-31T23:59:59Z"
           },
-          "disclosure_level": "free_busy",
+          "disclosure_level": "full",
           "slots": [
             {
               "start": "2026-10-27T21:00:00Z",
@@ -83,7 +83,7 @@
           "start": "2026-10-28T18:00:00Z",
           "end": "2026-10-28T19:00:00Z"
         },
-        "summary": "Shared that you are busy Mon 2-4pm, and offered Wed 11am."
+        "summary_code": "shared_availability"
       }
     },
     {
@@ -93,7 +93,7 @@
       "disclosure_level": "none",
       "reason_code": "conflict",
       "disclosed": {
-        "summary": "Declined Wed 11am. Reason sent: conflict."
+        "summary_code": "declined_with_reason"
       }
     },
     {
@@ -103,10 +103,20 @@
       "disclosure_level": "free_busy"
     }
   ],
-  "state_version": 9,
+  "outcome": {
+    "kind": "agreed",
+    "agreed_slot": {
+      "start": "2026-10-28T18:00:00Z",
+      "end": "2026-10-28T19:00:00Z"
+    },
+    "requires_human_approval": false
+  },
+  "state_version": 12,
   "viewer": {
     "student_ref": "stu_7Kp2Qm9Xr4Lt8Vn3",
     "agent_id": "agt_Qq1Ww2Ee3Rr4Tt5Y",
-    "max_disclosure_level": "free_busy"
+    "max_disclosure_level": "free_busy",
+    "awaiting_me": false,
+    "state": "accepted"
   }
 }

@@ -28,6 +28,7 @@
   "viewer": {
     "student_ref": "stu_7Kp2Qm9Xr4Lt8Vn3",
     "agent_id": "agt_Qq1Ww2Ee3Rr4Tt5Y",
-    "max_disclosure_level": "free_busy"
+    "max_disclosure_level": "free_busy",
+    "awaiting_me": false
   }
 }

@@ -3,10 +3,16 @@
 **Status:** frozen contract. T2 (backend) and T4 (ML) both code against this; T3 (GPU infra)
 implements the vLLM side. Changes go through the Orchestrator.
 
-The one rule: **the mock and vLLM are drop-in replacements for each other.** Phase 1 of this
-project is three agents negotiating with no GPU at all, and the demo must survive the cluster
-being unavailable mid-presentation. If any caller can tell which implementation it is talking
-to — by timing, by error shape, by a field that only one of them sets — that property is broken.
+The one rule: **the mock and vLLM are behaviourally substitutable.** Phase 1 of this project is
+three agents negotiating with no GPU at all, and the demo must survive the cluster being
+unavailable mid-presentation. So calling code must never branch on which implementation it has:
+same Protocol, same return shapes, the same four exceptions raised in the same situations.
+
+Substitutable is not *indistinguishable*. They report different model names and different
+latencies, and T4's benchmark depends on being able to tell them apart — a mock that hid its
+own latency would make the benchmark meaningless. An earlier draft of this file demanded
+indistinguishability "by timing", which contradicted both the latency field two sections below
+and T3's assignment. Behaviour is the contract; timing and model name are observations.
 
 ## The interface
 
@@ -81,8 +87,11 @@ re-validate. Negotiation messages are generated this way against
 
 ## The mock
 
-Lives behind the same Protocol, ships with the backend, and is the default in development and
-CI. It must be:
+Lives behind the same Protocol and ships with the backend. It is what development and CI
+**select** — `CAMPUSOS_INFERENCE_MODE=mock`, set explicitly in
+`.github/workflows/integration.yml` — and it is *not* a default: there is no default, and an
+unset value is a startup error. The difference matters, because "the mock is the default" is
+how a benchmark ends up silently measuring the mock. It must be:
 
 - **Deterministic** for a given `seed`. T4's reproducibility depends on it.
 - **Schema-correct**: when `response_schema` is set, it returns conforming output.

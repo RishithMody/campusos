@@ -2,15 +2,122 @@
   "schema_version": "1.0",
   "negotiation_id": "neg_Nn1Mm2Bb3Vv4Cc5X",
   "trace_id": "trc_Z9y8X7w6V5u4T3s2",
-  "status": "negotiating",
-  "round": 1,
+  "status": "converged",
+  "round": 3,
   "max_rounds": 8,
   "updated_at": "2026-10-24T18:30:00Z",
   "participants": [
-    { "student_ref": "stu_7Kp2Qm9Xr4Lt8Vn3", "agent_id": "agt_Qq1Ww2Ee3Rr4Tt5Y", "state": "proposed" },
-    { "student_ref": "stu_Zq8Wd3Ye6Hs1Bn5K", "agent_id": "agt_Aa1Ss2Dd3Ff4Gg5H", "state": "invited" }
+    {
+      "student_ref": "stu_7Kp2Qm9Xr4Lt8Vn3",
+      "display_name": "Ana",
+      "agent_id": "agt_Qq1Ww2Ee3Rr4Tt5Y",
+      "state": "accepted",
+      "disclosure_level": "free_busy"
+    },
+    {
+      "student_ref": "stu_Zq8Wd3Ye6Hs1Bn5K",
+      "display_name": "Ben",
+      "agent_id": "agt_Aa1Ss2Dd3Ff4Gg5H",
+      "state": "accepted",
+      "disclosure_level": "free_busy"
+    },
+    {
+      "student_ref": "stu_Mv4Rt7Jc2Pa9Dx6L",
+      "agent_id": "agt_Zz1Xx2Cc3Vv4Bb5N",
+      "state": "accepted",
+      "disclosure_level": "none"
+    }
+  ],
+  "proposals": [
+    {
+      "proposal_id": "prp_001aB2cD",
+      "slot": {
+        "start": "2026-10-28T18:00:00Z",
+        "end": "2026-10-28T19:00:00Z"
+      },
+      "proposed_by": "agt_Qq1Ww2Ee3Rr4Tt5Y",
+      "votes": [
+        {
+          "student_ref": "stu_7Kp2Qm9Xr4Lt8Vn3",
+          "vote": "accept"
+        },
+        {
+          "student_ref": "stu_Zq8Wd3Ye6Hs1Bn5K",
+          "vote": "accept"
+        },
+        {
+          "student_ref": "stu_Mv4Rt7Jc2Pa9Dx6L",
+          "vote": "accept"
+        }
+      ]
+    }
   ],
   "transcript": [
-    { "at": "2026-10-24T18:05:00Z", "agent_id": "agt_Qq1Ww2Ee3Rr4Tt5Y", "intent": "reject", "disclosure_level": "free_busy", "note": "Ana has therapy at 2pm" }
-  ]
+    {
+      "at": "2026-10-24T18:05:00Z",
+      "agent_id": "agt_Qq1Ww2Ee3Rr4Tt5Y",
+      "intent": "propose",
+      "disclosure_level": "free_busy",
+      "message_id": "msg_A1b2C3d4E5f6G7h8",
+      "disclosed": {
+        "availability": {
+          "schema_version": "1.0",
+          "student_ref": "stu_7Kp2Qm9Xr4Lt8Vn3",
+          "generated_at": "2026-10-24T18:00:00Z",
+          "timezone": "America/Phoenix",
+          "window": {
+            "start": "2026-10-27T00:00:00Z",
+            "end": "2026-10-31T23:59:59Z"
+          },
+          "disclosure_level": "free_busy",
+          "slots": [
+            {
+              "start": "2026-10-27T21:00:00Z",
+              "end": "2026-10-27T23:00:00Z",
+              "state": "busy"
+            }
+          ],
+          "redactions": 2
+        },
+        "proposed_slot": {
+          "start": "2026-10-28T18:00:00Z",
+          "end": "2026-10-28T19:00:00Z"
+        },
+        "summary_code": "shared_availability",
+        "summary": "Ana has therapy at 2pm"
+      }
+    },
+    {
+      "at": "2026-10-24T18:12:00Z",
+      "agent_id": "agt_Zz1Xx2Cc3Vv4Bb5N",
+      "intent": "counter",
+      "disclosure_level": "none",
+      "reason_code": "conflict",
+      "disclosed": {
+        "summary_code": "declined_with_reason"
+      }
+    },
+    {
+      "at": "2026-10-24T18:28:00Z",
+      "agent_id": "agt_Aa1Ss2Dd3Ff4Gg5H",
+      "intent": "accept",
+      "disclosure_level": "free_busy"
+    }
+  ],
+  "outcome": {
+    "kind": "agreed",
+    "agreed_slot": {
+      "start": "2026-10-28T18:00:00Z",
+      "end": "2026-10-28T19:00:00Z"
+    },
+    "requires_human_approval": false
+  },
+  "state_version": 12,
+  "viewer": {
+    "student_ref": "stu_7Kp2Qm9Xr4Lt8Vn3",
+    "agent_id": "agt_Qq1Ww2Ee3Rr4Tt5Y",
+    "max_disclosure_level": "free_busy",
+    "awaiting_me": false,
+    "state": "accepted"
+  }
 }

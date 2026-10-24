@@ -131,10 +131,46 @@ paths:
                   description: Optional context, so "why did you say no?" has an antecedent.
       responses:
         "200":
-          description: text/event-stream of token deltas, then a terminal event
+          description: |
+            `text/event-stream`. Exactly three event names, every `data:` line a single JSON
+            object. Specified to the byte because T2 writes the server and T5 writes the
+            client from this document alone, and "token deltas then a terminal event" is
+            satisfied by a dozen mutually incompatible framings.
+
+            - **`delta`** — `{"text": "..."}`. Zero or more. Concatenate `text` in order to
+              rebuild the reply. Never partial UTF-8: split on character boundaries.
+            - **`done`** — `{"message_id": "...", "finish_reason": "stop" | "length" | "cancelled"}`.
+              Exactly one, always last on a successful stream.
+            - **`error`** — `{"type": "...", "title": "...", "status": 0, "trace_id": "..."}`,
+              an RFC 9457 Problem. Terminal: nothing follows it, and no `done` is sent. Used
+              for failures *after* the 200 has been written, when no status code is left to
+              change — which is where a stream silently truncating gets mistaken for a short
+              answer. Carries no private schedule detail, like every other Problem.
+
+            A stream that ends without `done` or `error` is a failure; the client surfaces it
+            rather than treating the partial text as the whole reply.
+
+            ```
+            event: delta
+            data: {"text": "Ben can do Wednesday, "}
+
+            event: delta
+            data: {"text": "but not before 11."}
+
+            event: done
+            data: {"message_id": "msg_C3d4E5f6G7h8I9j0", "finish_reason": "stop"}
+            ```
           content:
             text/event-stream:
-              schema: { type: string }
+              schema:
+                type: string
+                description: SSE frames as specified above.
+              example: |
+                event: delta
+                data: {"text": "Ben can do Wednesday."}
+
+                event: done
+                data: {"message_id": "msg_C3d4E5f6G7h8I9j0", "finish_reason": "stop"}
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
@@ -318,13 +354,25 @@ paths:
     get:
       tags: [negotiations]
       summary: Server-sent stream of filtered state updates
-      description: Each event is a full NegotiationState document, filtered for this caller.
+      description: |
+        `text/event-stream`. Two event names, each `data:` line one JSON object.
+
+        - **`state`** — a complete `NegotiationState`, filtered for this caller. Full
+          documents rather than patches, so a client that misses an event recovers on the
+          next one. `state_version` is monotonic; a client that receives a lower version than
+          it already holds discards it, because out-of-order delivery must not roll an
+          approval prompt backwards.
+        - **`error`** — an RFC 9457 Problem, terminal. Also sent when a grant this stream
+          depended on is revoked, which closes the stream immediately rather than letting a
+          long-lived connection keep delivering after consent was withdrawn.
       responses:
         "200":
-          description: text/event-stream of NegotiationState documents
+          description: SSE stream of filtered NegotiationState documents
           content:
             text/event-stream:
-              schema: { type: string }
+              schema:
+                type: string
+                description: SSE frames as specified above.
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
 
@@ -384,6 +432,22 @@ paths:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
 
+  # ---------------------------------------------------------------------------------
+  # Track 3 consent, end to end. Four steps, because each answers a different question:
+  #
+  #   1. POST /channels                      is this a real channel, and is our bot in it?
+  #   2. POST /channels/{id}/members         which CampusOS student is which Discord user?
+  #   3. POST /negotiations/{id}/channel-bindings
+  #                                          may THIS negotiation be discussed in THAT room?
+  #      -> raises a post_to_channel approval for every participant, which each human finds
+  #         in their own pending_approvals and answers with POST /approvals/{id}
+  #   4. GET  /negotiations/{id}/channel-summary   only now does this stop returning 403
+  #
+  # Step 3 is per-negotiation and cannot be inherited: consenting to a room once is not
+  # consenting to every future negotiation in it. Every participant must approve, including
+  # one who is not in the channel -- posting about a negotiation discloses their involvement
+  # whether or not they can read the room.
+  # ---------------------------------------------------------------------------------
   /channels:
     post:
       tags: [channels]
@@ -395,10 +459,13 @@ paths:
         only component that could apply the channel's limit is the bot, and the bot is an
         untrusted client (boundary B1).
 
-        Registering binds a channel to a ceiling. Every participant who is also a channel member
-        confirms it; the ceiling then applies to anything posted there, regardless of what any
-        individual member is separately entitled to read. Membership changes do not widen it, and
-        a participant who is not a channel member is never named in it.
+        Registering establishes that the channel exists and that our bot is in it. It does **not**
+        authorise posting anything: that is per-negotiation, and step 3 above.
+
+        **Authenticated with the bot's service credential**, which is issued out of band and
+        bound to one Discord guild. The backend verifies with Discord that the bot is actually a
+        member of the channel before accepting; a bot cannot register a room it is not in, and
+        cannot register a room in another guild.
       requestBody:
         required: true
         content:
@@ -430,9 +497,131 @@ paths:
                   channel_id: { type: string, pattern: "^chn_[A-Za-z0-9]{8,64}$" }
                   confirmed:
                     type: boolean
-                    description: False until every participating channel member has confirmed. Until then the summary endpoint returns 403.
+                    description: |
+                      Always false here, and kept only so the field means one thing everywhere.
+                      Registration never authorises posting; consent is per-negotiation and is
+                      reported by `GET /negotiations/{id}/channel-bindings`.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: The bot is not in that channel, or the channel is outside its guild.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  /channels/{channel_id}/members:
+    parameters:
+      - name: channel_id
+        in: path
+        required: true
+        schema: { type: string, pattern: "^chn_[A-Za-z0-9]{8,64}$" }
+    post:
+      tags: [channels]
+      summary: Link the calling student to their identity in this channel
+      description: |
+        **Authenticated as the student, with a human token.** Takes no body: the backend uses the
+        Discord identity already verified on the caller's account through OAuth, and checks with
+        Discord that the identity is a member of this channel.
+
+        Deliberately not a mapping the bot can submit. If the bot could assert "this Discord user
+        is that CampusOS student", it could bind a student's data to an account they do not
+        control, and every consent decision downstream would be worthless.
+
+        A student who never links is simply never named in the channel. They still get a say in
+        whether the negotiation may be discussed there — see step 3.
+      responses:
+        "204": { description: Linked }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: The caller has no verified Discord identity, or it is not a member of this channel.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /negotiations/{negotiation_id}/channel-bindings:
+    parameters:
+      - name: negotiation_id
+        in: path
+        required: true
+        schema: { type: string, pattern: "^neg_[A-Za-z0-9]{16,64}$" }
+    post:
+      tags: [channels]
+      summary: Ask to discuss this negotiation in a registered channel
+      description: |
+        **Authenticated as a participant, with a human token.** Raises a `post_to_channel`
+        approval for **every participant**, which each of them finds in their own
+        `pending_approvals` and answers through `POST /approvals/{id}` — the same human-only
+        path as every other approval, carrying the same disclosure preview. There is no
+        channel-specific consent mechanism, deliberately: one approval surface means one place
+        where consent can be got wrong.
+
+        Participants who are not channel members are included. Posting about a negotiation
+        reveals that they are in it, and whether they can read the room does not change that.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [channel_id]
+              additionalProperties: false
+              properties:
+                channel_id: { type: string, pattern: "^chn_[A-Za-z0-9]{8,64}$" }
+      responses:
+        "201":
+          description: Requested; approvals raised
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChannelBinding" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    get:
+      tags: [channels]
+      summary: Whether this negotiation may be discussed in a channel yet
+      description: |
+        How confirmation becomes observable. Reports counts, never individual decisions: who
+        declined is their business, and surfacing it would turn a private no into social
+        pressure inside the very room the decision is about.
+      responses:
+        "200":
+          description: Current bindings for this negotiation
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [bindings]
+                additionalProperties: false
+                properties:
+                  bindings:
+                    type: array
+                    items: { $ref: "#/components/schemas/ChannelBinding" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /negotiations/{negotiation_id}/channel-bindings/{channel_id}:
+    parameters:
+      - name: negotiation_id
+        in: path
+        required: true
+        schema: { type: string, pattern: "^neg_[A-Za-z0-9]{16,64}$" }
+      - name: channel_id
+        in: path
+        required: true
+        schema: { type: string, pattern: "^chn_[A-Za-z0-9]{8,64}$" }
+    delete:
+      tags: [channels]
+      summary: Withdraw consent to discuss this negotiation in this channel
+      description: |
+        Any participant, for their own consent, at any time — including after the binding was
+        confirmed and summaries have already been posted. One withdrawal revokes the binding for
+        everyone, because the audience cannot be partially un-told. Already-posted messages stay
+        posted; the summary endpoint returns 403 from here on.
+      responses:
+        "204": { description: Withdrawn; the summary endpoint returns 403 from now on }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /negotiations/{negotiation_id}/channel-summary:
     parameters:
@@ -460,7 +649,14 @@ paths:
               schema: { $ref: "#/components/schemas/ChannelSummary" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403":
-          description: Channel not registered, not confirmed by all participating members, or the bot is not bound to it.
+          description: |
+            No confirmed binding for this negotiation and channel. Covers every reason: never
+            requested, still `pending_consent`, `declined`, `withdrawn`, or `pending_reconsent`
+            because the room grew. The body does not say which — a bot that learned "declined"
+            rather than "pending" would be able to report a private no into the channel.
+
+            **This is the missing-consent rejection.** The bot's only correct response is to say
+            nothing about the negotiation.
           content:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
@@ -542,6 +738,41 @@ components:
       $ref: "https://campusos.dev/contracts/v1/agent-protocol.schema.json"
     NegotiationState:
       $ref: "https://campusos.dev/contracts/v1/negotiation-state.schema.json"
+    ChannelBinding:
+      type: object
+      description: |
+        Whether one negotiation may be discussed in one channel. Counts only — never which
+        participant decided what.
+      required: [channel_id, negotiation_id, status, confirmations_outstanding, max_disclosure_level]
+      additionalProperties: false
+      properties:
+        channel_id: { type: string, pattern: "^chn_[A-Za-z0-9]{8,64}$" }
+        negotiation_id: { type: string, pattern: "^neg_[A-Za-z0-9]{16,64}$" }
+        status:
+          description: |
+            `pending_consent`: approvals are out. `confirmed`: every participant approved, and
+            the summary endpoint serves. `declined`: at least one said no. `withdrawn`: consent
+            was taken back. `pending_reconsent`: the channel's membership grew since consent was
+            given, so the audience is no longer the one anybody agreed to — see
+            `audience_size_at_consent`.
+          enum: [pending_consent, confirmed, declined, withdrawn, pending_reconsent]
+        confirmations_outstanding:
+          type: integer
+          minimum: 0
+          description: How many participants have not yet answered. Zero with status `pending_consent` is impossible.
+        max_disclosure_level:
+          type: string
+          enum: [none, free_busy]
+        audience_size_at_consent:
+          type: integer
+          minimum: 0
+          description: |
+            Channel members when consent was given. The backend compares it to the live count:
+            if the room has grown, the binding moves to `pending_reconsent` and the summary
+            endpoint returns 403 until the participants agree again. Consent is to an audience,
+            not to a name, and a room that doubles is a different audience.
+        confirmed_at: { type: string, format: date-time }
+
     ChannelSummary:
       type: object
       description: |
