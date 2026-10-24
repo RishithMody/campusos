@@ -36,47 +36,49 @@ kept **validated and submittable on short notice**.
 |---|---|---|---|---|---|
 | — | Orchestrator | T0 | claude | `~/campusos` (primary) | **`DONE`** — signed off 2026-10-24 |
 | — | Orchestrator | T0b | claude | — | **blocked on D2** (roster + owner) |
-| — | Orchestrator | T1 | claude | `~/campusos-worktrees/T1-architecture` | **`REVIEW`** — attempt 3, awaiting re-review + merge |
-| 1 | Backend Engineer | T2 | codex | — | waiting on T1 |
-| 2 | GPU Infra Engineer | T3 | codex | — | waiting on T1 |
-| 3 | ML Engineer | T4 | claude | — | waiting on T1 |
+| — | Orchestrator | T1 | claude | `~/campusos-worktrees/T1-architecture` | **`REVIEW_WAIVED`** — merged to `main`. Not a `PASS` |
+| 1 | Backend Engineer | T2 | codex | `~/campusos-worktrees/T2-backend` | **`READY`** — worktree created |
+| 2 | GPU Infra Engineer | T3 | codex | `~/campusos-worktrees/T3-gpu-infra` | **`READY`** — worktree created |
+| 3 | ML Engineer | T4 | claude | `~/campusos-worktrees/T4-ml-eval` | **`READY`** — worktree created |
 | — | Frontend Engineer | T5 → T9 | codex | — | waiting on stable `contracts/` |
 | — | QA / Security Reviewer | checkpoints | codex / claude | — | idle (no implementation slot) |
 
-**Implementation slots in use: 0 / 3**
+**Implementation slots in use: 3 / 3 — the limit. T5 and T9 wait for one to free.**
 
 ## Immediate next action
 
+**Agents, before you write anything:** read the two Codex reports and the waiver in
+`docs/agents/reviews/T1/`. T1 was merged **without** its final independent review, and those
+reports are the best account of what is sharp about these contracts. Short and specific.
+
 **Human, two things:**
 
-1. **Re-review and merge T1.** Two review rounds, 13 findings, all addressed. **Two of three
-   repair attempts are used.** If the third review also returns `CHANGES_REQUESTED`, the loop
-   is exhausted and the next step is `docs/agents/reviews/T1/ESCALATION.md` and a human
-   decision — not a fourth repair.
+1. **Launch the three implementation agents.** T1 is merged, `contracts/` is on `main` and
+   frozen, and the worktrees exist. One command each, in its own terminal:
 
    ```bash
    cd ~/campusos
-   ./scripts/agents.sh review T1          # attempt 2 of at most 3
-   git merge --no-ff task/T1-architecture # your decision, not an agent's
+   ./scripts/agents.sh start backend T2   # Codex
+   ./scripts/agents.sh start gpu     T3   # Codex
+   ./scripts/agents.sh start ml      T4   # Claude Code
    ```
 
-2. **Supply D2** — the team roster (1–4 members, name + school email each) and which member
-   **owns** the entry. It is the last thing blocking T0b, the only mandatory deliverable.
+   Each states its plan and waits for your go-ahead before editing anything.
+   **T3 must not touch the cluster** — there is no signed GPU approval token in its
+   assignment, and `docs/infra-policy.md` requires one.
 
-After the merge, the Orchestrator moves T2/T3/T4 to `READY` and the first parallel batch starts.
-**Do not `create` T2/T3/T4 before merging** — they would branch from a `main` with no
-`contracts/` in it.
+2. **Supply D2** — the team roster (1–4 members, name + school email each) and which member
+   **owns** the entry. It is the last thing blocking T0b, the only mandatory deliverable, and
+   it blocks every submission.
 
 ## Blocked and waiting
 
 | Task | Waiting on | Who unblocks it |
 |---|---|---|
 | T0b | **D2** — team roster and entry owner | **Human** |
-| T2, T3, T4 | **T1 merged to `main`** — contracts exist only on the branch | **Human** (merge) |
-| T5 | T1 + contracts declared **stable** | Orchestrator |
+| T5, T9 | **a free implementation slot** — 3 / 3 in use | whichever of T2/T3/T4 finishes |
 | T6 | T3, T4 **and** a human-signed GPU approval token | Human |
 | T7 | T2, T3, T5 | the three implementation agents |
-| T9 | T1, T2 | Orchestrator + Backend |
 | T10 | T0b (eligibility), T7 | Orchestrator |
 | T11 | T0b (eligibility), T9 | Orchestrator |
 | T8 | T0b, T10, T11 | Orchestrator |
@@ -99,7 +101,7 @@ After the merge, the Orchestrator moves T2/T3/T4 to `READY` and the first parall
 | Task | Attempts used | Verdict | Escalated |
 |---|---|---|---|
 | T0 | 0 | approved by the human 2026-10-24 | no |
-| T1 | **2 / 3 — one left** | attempt 1 `CHANGES_REQUESTED` (7 findings); attempt 2 `CHANGES_REQUESTED` (6 findings); all addressed, attempt 3 awaiting re-review | no |
+| T1 | 2 / 3 used | attempt 1 `CHANGES_REQUESTED` (7 findings); attempt 2 `CHANGES_REQUESTED` (6 findings); all 13 addressed. **Third review waived by the owner 2026-10-24, risk explicitly accepted.** `REVIEW_WAIVED`, never `PASS` — see `docs/agents/reviews/T1/WAIVER.md` | no |
 
 The loop is bounded at **3** repair attempts per task; the fourth attempt is refused and
 `docs/agents/reviews/<TASK>/ESCALATION.md` is written instead.
@@ -133,13 +135,15 @@ versions reviewed:
 
 | Contract | Status |
 |---|---|
-| `contracts/agent-protocol.schema.json` | **published on `task/T1-architecture`** — not yet on `main` |
-| `contracts/api.openapi.yaml` | **published on `task/T1-architecture`** — not yet on `main` |
-| `contracts/negotiation-state.schema.json` | **published on `task/T1-architecture`** — not yet on `main` |
-| `contracts/availability.schema.json` | **published on `task/T1-architecture`** — shared by all three tracks |
-| `contracts/inference.md` | **published on `task/T1-architecture`** — not yet on `main` |
+| `contracts/agent-protocol.schema.json` | **FROZEN on `main`** |
+| `contracts/api.openapi.yaml` | **FROZEN on `main`** |
+| `contracts/negotiation-state.schema.json` | **FROZEN on `main`** |
+| `contracts/availability.schema.json` | **FROZEN on `main`** |
+| `contracts/inference.md` | **FROZEN on `main`** |
 
-They become frozen when the human merges. Until then they are reviewable and changeable.
+**Merged 2026-10-24 — they are frozen now.** To change one: write the proposal in your handoff,
+set your task to `REVIEW`, and stop. Never edit a published schema: three agents are building
+against it right now, from sessions that cannot see your change.
 
 Once published, a contract is **frozen**. Changes go through the Orchestrator, who versions
 the change and notifies every dependent agent.
