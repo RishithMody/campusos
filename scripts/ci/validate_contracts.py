@@ -134,7 +134,29 @@ def check_yaml(path: Path) -> None:
                 errors.append(f"{rel(path)}: OpenAPI doc missing '{key}'")
 
 
-def check_fixtures(schema_path: Path, schema: dict) -> None:
+def build_registry(schemas: list[tuple[Path, dict]]):
+    """Resolve $refs between contract files offline.
+
+    The schemas reference each other by their public $id. Without a registry, jsonschema
+    would try to fetch those URLs over the network and the check would fail in CI for a
+    reason that has nothing to do with the contracts.
+    """
+    try:
+        from referencing import Registry, Resource
+    except ImportError:
+        errors.append(
+            "cannot resolve $refs between contracts -- the 'referencing' package is missing "
+            f"(it ships with jsonschema).\n         {SETUP_HINT}"
+        )
+        return None
+    registry = Registry()
+    for path, schema in schemas:
+        if "$id" in schema:
+            registry = registry.with_resource(schema["$id"], Resource.from_contents(schema))
+    return registry
+
+
+def check_fixtures(schema_path: Path, schema: dict, registry=None) -> None:
     """Each schema needs a valid fixture AND one that is correctly rejected.
 
     A schema nobody has exercised is a guess. The negative fixture is the one that
@@ -158,7 +180,7 @@ def check_fixtures(schema_path: Path, schema: dict) -> None:
     except jsonschema.exceptions.SchemaError as exc:
         errors.append(f"{rel(schema_path)}: not a legal JSON Schema -- {exc.message}")
         return
-    validator = validator_cls(schema)
+    validator = validator_cls(schema, registry=registry) if registry else validator_cls(schema)
 
     if not folder.is_dir():
         errors.append(
@@ -177,11 +199,24 @@ def check_fixtures(schema_path: Path, schema: dict) -> None:
             "what proves the schema rejects anything at all."
         )
 
+    def unresolved(fixture: Path, exc: Exception) -> None:
+        # A $ref to a schema that is not in contracts/ would otherwise be fetched over the
+        # network, or blow up with a traceback. Both are wrong: report it as the contract bug
+        # it is, and name the ref so it can be fixed.
+        errors.append(
+            f"{rel(fixture)}: {schema_path.name} has an unresolvable $ref -- {exc}. Every "
+            "referenced schema must be a contract in this directory, declaring that exact $id."
+        )
+
     for fixture in valid:
         data = load_json(fixture)
         if data is None:
             continue
-        found = sorted(validator.iter_errors(data), key=lambda e: list(e.path))
+        try:
+            found = sorted(validator.iter_errors(data), key=lambda e: list(e.path))
+        except Exception as exc:  # noqa: BLE001 - unresolvable $ref and friends
+            unresolved(fixture, exc)
+            continue
         if found:
             first = found[0]
             where = "/".join(str(p) for p in first.path) or "(root)"
@@ -194,7 +229,12 @@ def check_fixtures(schema_path: Path, schema: dict) -> None:
         data = load_json(fixture)
         if data is None:
             continue
-        if validator.is_valid(data):
+        try:
+            accepted = validator.is_valid(data)
+        except Exception as exc:  # noqa: BLE001
+            unresolved(fixture, exc)
+            continue
+        if accepted:
             errors.append(
                 f"{rel(fixture)}: expected to be REJECTED by {schema_path.name}, but it "
                 "validated. Either the fixture is not actually invalid, or the schema is "
@@ -253,8 +293,9 @@ def main() -> int:
         else:
             warnings.append(f"{rel(path)}: unrecognised contract file type")
 
+    registry = build_registry(schemas)
     for schema_path, schema in schemas:
-        check_fixtures(schema_path, schema)
+        check_fixtures(schema_path, schema, registry)
 
     for w in warnings:
         print(f"WARN  {w}")

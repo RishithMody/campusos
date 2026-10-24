@@ -113,6 +113,20 @@ mkdir -p "$cdir/examples/thing"
 printf '{"id":"a","n":1}\n'  > "$cdir/examples/thing/valid-basic.json"
 printf '{"id":"a","n":-5}\n' > "$cdir/examples/thing/invalid-negative.json"
 
+# A $ref pointing at a schema that is not in contracts/ must be a clean error, not a
+# traceback and not a silent network fetch.
+cat > "$cdir/refs.schema.json" <<'JSON'
+{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://example.test/refs.json",
+ "title":"Refs","type":"object","properties":{"x":{"$ref":"https://example.test/missing.json"}},
+ "required":["x"]}
+JSON
+mkdir -p "$cdir/examples/refs"
+printf '{"x":{}}\n'   > "$cdir/examples/refs/valid-x.json"
+printf '{"y":1}\n'    > "$cdir/examples/refs/invalid-missing-x.json"
+t "unresolvable \$ref is an error"  1 $PYBIN scripts/ci/validate_contracts.py --contracts "$cdir"
+t "unresolvable \$ref: no traceback" 1 bash -c "$PYBIN scripts/ci/validate_contracts.py --contracts '$cdir' 2>&1 | grep -q Traceback"
+rm -rf "$cdir/examples/refs" "$cdir/refs.schema.json"
+
 # Missing dependencies must be an explicit failure, never a silent skip. A bare system
 # python has neither jsonschema nor PyYAML, so this must refuse.
 if python3 -I -c "import jsonschema" 2>/dev/null; then
