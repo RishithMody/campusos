@@ -454,6 +454,30 @@ a review of an uncommitted tree cannot be reproduced."
     die "$branch has no commits beyond $BASE_BRANCH — nothing to review."
   fi
 
+  # Refuse to review a branch that has absorbed another task branch. Reviewing it would
+  # pass another agent's unreviewed work through this task's review, and blur the file
+  # ownership that makes parallel agents safe. Checked here because it is only reliably
+  # detectable after the merge commit exists (see .githooks/post-merge).
+  local foreign="" other
+  for other in $(git -C "$wt" for-each-ref --format='%(refname:short)' refs/heads/task/ 2>/dev/null); do
+    if [ "$other" != "$branch" ] \
+       && git -C "$wt" merge-base --is-ancestor "refs/heads/$other" HEAD 2>/dev/null; then
+      foreign="$foreign  $other"$'\n'
+    fi
+  done
+  if [ -n "$foreign" ]; then
+    hdr "$branch has absorbed another agent's branch"
+    printf '%s\n' "$foreign"
+    die "refusing to review $task.
+Each task is reviewed on its own diff. Merging another task branch in smuggles
+unreviewed work past its reviewer and blurs file ownership.
+
+The implementing agent should undo the merge:
+  git -C $wt reset --hard <commit before the merge>
+
+If it genuinely needs that work, the Orchestrator sequences the tasks instead."
+  fi
+
   # ---- bounded loop: count prior attempts, escalate instead of looping forever
   local rdir="$REPO_ROOT/docs/agents/reviews/$task"
   mkdir -p "$rdir"
@@ -675,7 +699,7 @@ cmd_doctor() {
     info "  git -C $REPO_ROOT config core.hooksPath .githooks"
     fail=1
   fi
-  for c in pre-commit pre-merge-commit pre-push; do
+  for c in pre-commit pre-merge-commit post-merge pre-push; do
     if [ -x "$REPO_ROOT/.githooks/$c" ]; then ok "hook $c executable"; else
       warn "hook .githooks/$c missing or not executable"; fail=1
     fi

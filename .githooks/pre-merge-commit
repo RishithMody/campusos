@@ -1,10 +1,17 @@
 #!/usr/bin/env bash
 #
-# pre-merge-commit — agents must never merge another branch's work into their own,
-# and never merge into the base branch. Integration is the human's control point.
+# pre-merge-commit — agents never merge into the base branch.
 #
 # Updating your own task branch *from* the base branch is allowed: that is routine
-# hygiene, not integration. Anything else from an agent worktree is refused.
+# hygiene, not integration.
+#
+# KNOWN LIMITATION, verified by testing rather than assumed: on a clean, automatically
+# committed merge, git has NOT yet written MERGE_HEAD or MERGE_MSG when this hook runs
+# (only AUTO_MERGE, which is a tree, and COMMIT_EDITMSG). So this hook cannot reliably
+# identify *what* is being merged. It enforces the one thing it can check reliably --
+# the branch being merged into -- and the `post-merge` hook plus
+# `./scripts/agents.sh review` catch a foreign branch merge after the fact, where the
+# parents of the new commit make it unambiguous.
 #
 set -uo pipefail
 RED=$'\033[31m'; N=$'\033[0m'
@@ -19,8 +26,7 @@ BASE="${CAMPUSOS_BASE_BRANCH:-main}"
 BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo HEAD)"
 
 refuse() {
-  printf '%s✗ pre-merge-commit blocked this merge%s\n\n' "$RED" "$N" >&2
-  printf '%s\n\n' "$1" >&2
+  printf '%s✗ pre-merge-commit blocked this merge%s\n\n%s\n\n' "$RED" "$N" "$1" >&2
   cat >&2 <<'MSG'
 Integration and merge approval are human decisions — that is the operator's main
 control over a multi-agent system. Finish your task, write a handoff, and set the
@@ -32,16 +38,14 @@ MSG
   exit 1
 }
 
-# 1. Never merge into the base branch from an agent worktree.
 case "$BRANCH" in
   "$BASE"|main|master)
     refuse "You are merging into '$BRANCH' from an agent worktree." ;;
 esac
 
-# 2. Only commits already contained in the base branch may be merged in. That permits
-#    'git merge $BASE' (updating your branch) and refuses another agent's task branch,
-#    which would blur file ownership and smuggle unreviewed work into your diff.
-if [ -f "$(git rev-parse --git-dir)/MERGE_HEAD" ]; then
+# When MERGE_HEAD *is* available (a conflicted merge, or --no-commit), use it: only
+# commits already contained in the base branch may be merged in.
+if [ -f "$GITDIR/MERGE_HEAD" ]; then
   while read -r sha; do
     [ -z "$sha" ] && continue
     if ! git merge-base --is-ancestor "$sha" "refs/heads/$BASE" 2>/dev/null; then
@@ -51,7 +55,7 @@ if [ -f "$(git rev-parse --git-dir)/MERGE_HEAD" ]; then
 Agents may update their own branch from $BASE, but may not merge another agent's
 work into theirs. Each task is reviewed on its own diff."
     fi
-  done < "$(git rev-parse --git-dir)/MERGE_HEAD"
+  done < "$GITDIR/MERGE_HEAD"
 fi
 
 exit 0

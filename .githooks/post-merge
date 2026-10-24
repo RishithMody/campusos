@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+#
+# post-merge — detect a foreign branch merge after the fact.
+#
+# This runs *after* the merge commit exists, which is the first moment the merge source
+# is unambiguous: it is simply a parent of HEAD. pre-merge-commit cannot see this on an
+# automatically committed merge (git has not written MERGE_HEAD yet), so this hook is
+# where the foreign-merge check actually works.
+#
+# A hook here cannot block -- the commit is already made -- so it tells the agent exactly
+# how to undo it, and `./scripts/agents.sh review` independently refuses to review a
+# branch that absorbed another task branch.
+#
+set -uo pipefail
+RED=$'\033[31m'; YEL=$'\033[33m'; N=$'\033[0m'
+
+GITDIR="$(git rev-parse --path-format=absolute --git-dir)"
+COMMONDIR="$(git rev-parse --path-format=absolute --git-common-dir)"
+[ "$GITDIR" = "$COMMONDIR" ] && exit 0      # primary worktree: merging is expected
+
+BASE="${CAMPUSOS_BASE_BRANCH:-main}"
+git show-ref --verify --quiet "refs/heads/$BASE" || exit 0
+
+# Only inspect an actual merge commit (more than one parent).
+nparents="$(git rev-list --parents -1 HEAD | wc -w | tr -d ' ')"
+[ "$nparents" -le 2 ] && exit 0
+
+foreign=""
+for sha in $(git rev-list --parents -1 HEAD | cut -d' ' -f2-); do
+  # A parent already contained in the base branch is fine (that is `git merge main`).
+  git merge-base --is-ancestor "$sha" "refs/heads/$BASE" 2>/dev/null && continue
+  # A parent that is an ancestor of this branch's own prior tip is fine.
+  git merge-base --is-ancestor "$sha" "HEAD@{1}" 2>/dev/null && continue
+  desc="$(git name-rev --name-only "$sha" 2>/dev/null || echo "$sha")"
+  foreign="$foreign  $desc ($(git rev-parse --short "$sha"))"$'\n'
+done
+
+[ -z "$foreign" ] && exit 0
+
+printf '\n%s✗ You merged work that is not yours%s\n\n' "$RED" "$N" >&2
+printf 'Merged into %s:\n%s\n' "$(git rev-parse --abbrev-ref HEAD)" "$foreign" >&2
+cat >&2 <<MSG
+Agents may update their own branch from $BASE, but may not merge another agent's
+work into theirs: each task is reviewed on its own diff, and absorbing another
+branch smuggles unreviewed work past its reviewer and blurs file ownership.
+
+${YEL}Undo it now:${N}
+
+  git reset --hard HEAD@{1}
+
+If you genuinely need something from that branch, say so in your handoff and let
+the Orchestrator sequence the work.
+
+./scripts/agents.sh review will refuse to review this branch until it is undone.
+
+MSG
+exit 1

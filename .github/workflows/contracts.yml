@@ -41,8 +41,7 @@ jobs:
       - name: Shellcheck
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
-          shellcheck -S warning scripts/agents.sh scripts/ci/*.sh .githooks/pre-commit \
-            .githooks/pre-merge-commit .githooks/pre-push || {
+          shellcheck -S warning scripts/agents.sh scripts/ci/*.sh .githooks/* || {
               echo "::warning::shellcheck reported issues (non-blocking for now)"; }
 
       - name: Orchestration files present
@@ -63,7 +62,7 @@ jobs:
       - name: Hooks are executable
         run: |
           fail=0
-          for h in pre-commit pre-merge-commit pre-push; do
+          for h in pre-commit pre-merge-commit post-merge pre-push; do
             if [ -x ".githooks/$h" ]; then echo "ok   $h"; else
               echo "NOT EXECUTABLE .githooks/$h"; fail=1; fi
           done
