@@ -340,15 +340,34 @@ accumulating votes from day one, with no dependency on our backend being up.
 
 ---
 
-## Open decisions for the human
+## Decisions — settled 2026-10-24
 
-| # | Decision | Blocks | Why it needs you |
-|---|---|---|---|
-| D1 | **Make the repo public, and when.** Required for all three tracks (§5). | T0b, all submissions | Irreversible disclosure. The repo must be public before judging; nothing is published until you say so. |
-| D2 | **Team roster:** 1–4 members, name + school email each; who **owns** the entry. | T0b | Only the owner can edit; wrong account = a second entry nobody can fix. School email also enables voting. |
-| D3 | **Confirm Track 1 pivot (C2)** from solo study planning to cross-student coordination. | T0b, T1 | Changes the product thesis; the rest of the plan follows from it. |
-| D4 | **Confirm Track 3 on Discord (C1)**, since Cubbie group chat does not exist. | Track 3 tasks | Adds a messaging dependency the original brief did not have. |
-| D5 | **Submit Track 1 early** (a minimal valid entry now, improved by pushing commits)? | Track 2/3 eligibility | Gains voting days and unlocks Tracks 2/3 immediately. Entry is public the instant it is sent. |
+| # | Decision | Answer |
+|---|---|---|
+| D1 | Where the Track 1 Skill lives | **A separate public Skill repo.** `campusos` stays private for now. Tracks 2 and 3 each need a public repo too — decided separately, before T10/T11. |
+| D2 | Team roster and entry owner | **STILL OPEN.** Needed before anything is submitted. |
+| D3 | Track 1 product direction | **Pivot confirmed** — cross-student coordination with minimum disclosure (`squad-sync`), not solo study planning. |
+| D4 | Track 3 platform | **Discord.** |
+| D5 | Submit Track 1 early? | **No — submit when polished.** |
+
+### Consequences of D5 that the plan must carry
+
+Submitting when polished is a deliberate quality choice, and it has two costs that are now
+scheduling constraints rather than open questions:
+
+1. **Tracks 2 and 3 stay locked until Track 1 is submitted.** The organizers' database refuses
+   them. T10 and T11 therefore depend on a *finished* T0b, not a placeholder one.
+2. **No deadline is published, and a close time can appear at any moment** (§1). "Polished" must
+   therefore be a bar we can hit on short notice, not an open-ended one. The mitigation is to
+   keep a **validated, submittable entry ready at all times** once the Skill exists — the
+   validator clean, the repo public, the roster known — so that if a cutoff appears, submitting
+   is a one-command action and not a scramble. Re-check the live windows regularly.
+
+### Still outstanding
+
+- **D2 — team roster:** 1–4 members, each with a name and **school email**, and which of them
+  **owns** the entry. One email address is one account; only the owner can edit; school emails
+  are also what makes a person eligible to vote. Nothing can be submitted without this.
 
 ---
 

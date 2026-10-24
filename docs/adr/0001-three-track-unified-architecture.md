@@ -1,6 +1,6 @@
 # ADR 0001 — One platform, three track submissions
 
-- **Status:** Accepted (pending human confirmation of D3 and D4)
+- **Status:** Accepted. D1, D3, D4 and D5 confirmed by the human 2026-10-24; D2 outstanding.
 - **Date:** 2026-10-24
 - **Author:** Orchestrator
 - **Supersedes:** the single-track assumption in the original `docs/execution-plan.md`
@@ -30,21 +30,25 @@ A Cubbie Skill script may call our API over HTTPS/443 to a publicly reachable ho
 out by the platform, not by preference. Cubbie fetches Canvas/Calendar data itself and passes it
 to the script as arguments or a file — **scripts cannot call Cubbie's abilities**.
 
-### D-3. Track 1 phase 1 ships with no backend dependency at all.
-The first Track 1 entry is instructions-only: `SKILL.md` using Cubbie's connected abilities, with
-the student sharing the result themselves. Reasons: the entry is the mandatory deliverable and the
-gate for Tracks 2 and 3; it is scored on votes accumulated over time; and Cubbie installs the
-newest commit, so the hosted version is a later push needing no resubmission. **A valid entry must
-never be blocked on our infrastructure being up.**
+### D-3. The Track 1 entry depends on no infrastructure we operate.
+The Skill is instructions-only: `SKILL.md` using Cubbie's connected abilities, with the student
+sharing the result themselves. **A mandatory deliverable must never be blocked on our own
+infrastructure being up.** Any hosted-API version is a later push to the same repo, which Cubbie
+picks up automatically because it installs the newest commit.
+
+*Amended by D5 (human, 2026-10-24): the entry is submitted when polished, not as early as
+possible.* That makes the no-infrastructure property more important, not less — the entry must
+be submittable on short notice, because no deadline is published and a cutoff can appear at any
+time. Keep a validated, submittable entry ready once the Skill exists.
 
 ### D-4. Track 2's agent-to-agent traffic never routes through Cubbie.
 Personal agents exchange envelopes through our own service. Cubbie is where a student *talks to
 their own agent* and *gives consent*, nothing more. This is what the platform permits and what the
 Track 2 rules already assume ("doesn't need to be built on Cubbie").
 
-### D-5. Track 3 is a Discord bot.
+### D-5. Track 3 is a Discord bot. **Confirmed by the human 2026-10-24.**
 Discord has a free bot API, the organizers already run a Discord, and it screen-records well.
-The rules allow any messaging app. **Pending D4 confirmation from the human.**
+The rules allow any messaging app.
 
 ### D-6. One disclosure-controlled availability envelope, shared by all three tracks.
 `contracts/availability.schema.json` is the single representation of "when a student is free and

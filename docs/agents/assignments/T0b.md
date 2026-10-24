@@ -6,8 +6,8 @@
 | **Agent** | Orchestrator |
 | **CLI** | `claude` |
 | **Reviewer** | Human |
-| **Depends on** | T0 ✅ **and** human decisions D1, D2, D3 |
-| **Status** | `BLOCKED` — on the human, not on engineering |
+| **Depends on** | T0 ✅ **and** human decision D2 (roster + entry owner) |
+| **Status** | `BLOCKED` — on D2 only |
 | **Branch** | `task/T0b-cubbie-skill` |
 | **Worktree** | `~/campusos-worktrees/T0b-cubbie-skill` |
 | **Repair attempts** | 0 / 3 |
@@ -54,11 +54,18 @@ There is **no** `cubbie.yaml` and no Cubbie-specific manifest.
 **You own:** `skills/squad-sync/` (final name is part of this task), `submission/track1/`
 **Read-only:** everything else. This task writes no backend, frontend, ml or infra code.
 
+**Publishing target (D1):** the Skill ships in a **separate public GitHub repo**. `campusos`
+stays private. Develop here, publish there; the submitted link points at the public repo.
+
 ## Scope — instructions only, no backend
 
-Per ADR 0001 (D-3): the first entry uses only Cubbie's **connected abilities** and has the
-student share the result themselves. It must not depend on our API, our cluster, or anything we
-operate. The hosted-API version is a later push to the same repo.
+Per ADR 0001 (D-3): the entry uses only Cubbie's **connected abilities** and has the student
+share the result themselves. It must not depend on our API, our cluster, or anything we operate.
+The hosted-API version is a later push to the same repo.
+
+The human chose to submit **when polished** (D5). That makes this property more important, not
+less: no deadline is published, so once the Skill exists keep it **validated and submittable on
+short notice** — validator clean, repo public, roster known — and re-check the live windows.
 
 ## Acceptance criteria
 
@@ -99,9 +106,10 @@ operate. The hosted-API version is a later push to the same repo.
 
 | | Decision | Why it blocks |
 |---|---|---|
-| **D1** | Repository public, and which repo holds the Skill | The install link must be a public GitHub repo |
-| **D2** | Team roster (1–4, name + school email) and the entry **owner** | Only the owner can edit; one address is one account |
-| **D3** | Confirm the pivot away from solo study planning | Determines what the Skill actually is |
+| **D2** | Team roster (1–4, name + school email) and the entry **owner** | Only the owner can edit; one address is one account. **The only thing still blocking this task.** |
+
+Settled already: D1 separate public Skill repo · D3 pivot to `squad-sync` · D5 submit when
+polished, not early.
 
 ## Out of scope
 

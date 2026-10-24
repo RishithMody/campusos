@@ -21,15 +21,21 @@ entry is a folder with a `SKILL.md` in a public GitHub repo — that is the whol
 review gate, entries stay editable, and **edits keep accumulated votes**, so submitting a minimal
 valid entry early is free and strictly better.
 
-**Nothing has been submitted and nothing has been made public.** Five decisions are waiting on
-the human before anything ships.
+**Nothing has been submitted and nothing has been made public.** Four of the five decisions are
+settled (2026-10-24): a **separate public Skill repo**, the **`squad-sync` pivot**, **Discord for
+Track 3**, and **submit when polished, not early**. **D2 — the team roster and entry owner — is
+still open and blocks every submission.**
+
+Because Track 1 is submitted only when polished, Tracks 2 and 3 stay locked until then. No
+deadline is published and a cutoff can appear at any time, so once the Skill exists it must be
+kept **validated and submittable on short notice**.
 
 ## Right now
 
 | Slot | Agent | Task | CLI | Worktree | State |
 |---|---|---|---|---|---|
 | — | Orchestrator | T0 | claude | `~/campusos` (primary) | **`REVIEW`** — findings delivered |
-| — | Orchestrator | T0b | claude | — | **blocked on human** (D1–D3) |
+| — | Orchestrator | T0b | claude | — | **blocked on D2** (roster + owner) |
 | — | Orchestrator | T1 | claude | — | **ready to start** |
 | 1 | Backend Engineer | T2 | codex | — | waiting on T1 |
 | 2 | GPU Infra Engineer | T3 | codex | — | waiting on T1 |
@@ -41,8 +47,8 @@ the human before anything ships.
 
 ## Immediate next action
 
-**Human:** answer D1–D5 in `docs/hackathon-requirements.md`. D1–D3 unblock T0b, which is the only
-mandatory deliverable and the gate for the other two tracks.
+**Human:** supply **D2** — the team roster (1–4 members, name + school email each) and which
+member **owns** the entry. It is the last thing blocking T0b, the only mandatory deliverable.
 
 In parallel, T1 (architecture and contracts) is `READY` and depends on nothing:
 
@@ -51,19 +57,19 @@ cd ~/campusos
 ./scripts/agents.sh create orchestrator T1
 ```
 
-T0b and T1 are both Orchestrator tasks and do not consume implementation slots. T0b should go
-first if the human's decisions land — it is small and it is the one thing that must ship.
+T0b and T1 are both Orchestrator tasks and do not consume implementation slots, so they can run
+in either order. T1 is unblocked now; T0b needs D2.
 
 ## Blocked and waiting
 
 | Task | Waiting on | Who unblocks it |
 |---|---|---|
-| T0b | D1 (public repo), D2 (roster + owner), D3 (Track 1 pivot) | **Human** |
+| T0b | **D2** — team roster and entry owner | **Human** |
 | T2, T3, T4 | T1 (`contracts/` published and merged) | Orchestrator |
 | T5 | T1 + contracts declared **stable** | Orchestrator |
 | T6 | T3, T4 **and** a human-signed GPU approval token | Human |
 | T7 | T2, T3, T5 | the three implementation agents |
-| T9 | T1, T2, and D4 (Track 3 on Discord) | Human + Backend |
+| T9 | T1, T2 | Orchestrator + Backend |
 | T10 | T0b (eligibility), T7 | Orchestrator |
 | T11 | T0b (eligibility), T9 | Orchestrator |
 | T8 | T0b, T10, T11 | Orchestrator |
@@ -75,11 +81,11 @@ first if the human's decisions land — it is small and it is the one thing that
 | ~~1~~ | ~~What are the Cubbie Hackathon rules, deadline, and Skill format?~~ **Answered by T0** — see `docs/hackathon-requirements.md`. Residual unknowns are listed under its `## Unverified` heading and belong to the organizers, not to us. | — | closed 2026-10-24 |
 | 2 | H200 cluster access details — host alias in `~/.ssh/config`, scheduling conventions, who else shares the GPUs. Must not be committed. | T3 | 2026-10-24 |
 | 3 | GPU budget cap (GPU-hours) for T6 fine-tuning, if any. T6 is optional. | T6 | 2026-10-24 |
-| D1 | **Make the repository public — and which repo holds the Skill?** Required by all three tracks. The Skill may live in a folder of this repo, or in a separate public repo. | T0b, all submissions | 2026-10-24 |
-| D2 | **Team roster** (1–4 members, name + school email) and **who owns the entry.** Only the owner can edit it; one address is one account. | T0b | 2026-10-24 |
-| D3 | **Confirm the Track 1 pivot** away from solo study planning, which collides with Cubbie's built-in `study-plan-builder`, toward cross-student coordination with minimum disclosure. | T0b, T1 | 2026-10-24 |
-| D4 | **Confirm Track 3 on Discord.** Cubbie has no group chat and cannot text anyone but its own student. | T9 | 2026-10-24 |
-| D5 | **Submit Track 1 early?** A minimal valid entry now, improved by pushing commits. Gains voting days and unlocks Tracks 2 and 3. | Track 2/3 eligibility | 2026-10-24 |
+| D1 | ~~Repo visibility~~ **Decided:** a separate public Skill repo; `campusos` stays private. Tracks 2 and 3 need a public repo before T10/T11. | — | closed 2026-10-24 |
+| **D2** | **Team roster** (1–4 members, name + school email) and **who owns the entry.** Only the owner can edit; one address is one account; school email enables voting. **Blocks every submission.** | T0b, T10, T11 | **OPEN** |
+| D3 | ~~Track 1 direction~~ **Decided:** pivot to `squad-sync`, cross-student coordination with minimum disclosure. | — | closed 2026-10-24 |
+| D4 | ~~Track 3 platform~~ **Decided:** Discord. | — | closed 2026-10-24 |
+| D5 | ~~Submit Track 1 early?~~ **Decided:** no — submit when polished. Tracks 2 and 3 stay locked until Track 1 is in. | — | closed 2026-10-24 |
 
 ## Review loop state
 

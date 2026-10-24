@@ -32,11 +32,17 @@ claim. T0 replaced the old assumptions. The four findings that reshape this grap
 kickoff time, Track 2/3 judging criteria, the vote-vs-social weighting, and video length rules.
 Ask the organizers: <https://discord.gg/7eJADTbQMT>.
 
-## ⛔ Blocked on human decisions
+## Decisions settled 2026-10-24
 
-`T0b` cannot ship until the human answers D1–D5 in `docs/hackathon-requirements.md`:
-repo visibility, team roster and entry owner, the Track 1 pivot, Track 3 on Discord, and whether
-to submit Track 1 early. Nothing is published without that sign-off.
+A **separate public Skill repo** (`campusos` stays private); the Track 1 **`squad-sync` pivot**;
+**Discord** for Track 3; and **submit when polished, not early**. Full record:
+`docs/hackathon-requirements.md`.
+
+⛔ **Still blocking every submission: D2** — the team roster (1–4 members, name + school email)
+and which member owns the entry. Nothing is submitted without it, or without an explicit yes.
+
+Because Track 1 is submitted only when polished, **T10 and T11 depend on a finished T0b.** No
+deadline is published, so once the Skill exists keep it validated and submittable on short notice.
 
 ---
 
@@ -72,7 +78,7 @@ the Track 2 agent-to-agent message, and the Track 3 group-chat payload. The back
 | ID | Task | Track | Agent | CLI | Depends on | Status |
 |---|---|---|---|---|---|---|
 | T0 | Verify hackathon requirements | all | Orchestrator | Claude Code | — | `REVIEW` |
-| T0b | **Track 1 Cubbie Skill + submission** | 1 | Orchestrator | Claude Code | T0 + D1–D5 | `BLOCKED` (human) |
+| T0b | **Track 1 Cubbie Skill + submission** | 1 | Orchestrator | Claude Code | T0 + **D2** | `BLOCKED` (D2) |
 | T1 | Architecture & shared contracts | all | Orchestrator | Claude Code | — | `READY` |
 | T2 | Backend implementation | 1·2·3 | Backend Engineer | Codex | T1 | `BLOCKED` |
 | T3 | GPU inference setup (vLLM) | 2·3 | GPU Infra Engineer | Codex | T1 | `BLOCKED` |
@@ -123,10 +129,11 @@ None (documentation task). Verification = every claim carries a source URL and a
 | | |
 |---|---|
 | **Agent** | Orchestrator (Claude Code) |
-| **Depends on** | T0 **and** human decisions D1, D2, D3 |
-| **Status** | `BLOCKED` — on the human, not on engineering |
+| **Depends on** | T0 ✅ **and** human decision D2 (roster + entry owner) |
+| **Status** | `BLOCKED` — on D2 only |
 | **Branch / worktree** | `task/T0b-cubbie-skill` → `~/campusos-worktrees/T0b-cubbie-skill` |
 | **Owns** | `skills/squad-sync/`, `submission/track1/` |
+| **Publishes to** | a **separate public GitHub repo** (D1); `campusos` stays private |
 
 **The highest-priority task in the project.** It is the only mandatory deliverable, it gates
 Tracks 2 and 3, and it is scored on votes accumulated over time — so every day it is not live
