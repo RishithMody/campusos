@@ -35,15 +35,25 @@ kept **validated and submittable on short notice**.
 | Slot | Agent | Task | CLI | Worktree | State |
 |---|---|---|---|---|---|
 | — | Orchestrator | T0 | claude | `~/campusos` (primary) | **`DONE`** — signed off 2026-10-24 |
-| — | Orchestrator | T0b | claude | — | **blocked on D2** (roster + owner) |
+| — | Orchestrator | T0b | claude | `~/campusos-worktrees/T0b-cubbie-skill` | **`REVIEW`** — Skill + public package ready for owner acceptance |
+| — | Orchestrator | T0c | claude | — | **blocked on D2** — publish + submit |
 | — | Orchestrator | T1 | claude | `~/campusos-worktrees/T1-architecture` | **`REVIEW_WAIVED`** — merged to `main`. Not a `PASS` |
 | 1 | Backend Engineer | T2 | codex | `~/campusos-worktrees/T2-backend` | **`READY`** — worktree created |
-| 2 | GPU Infra Engineer | T3 | codex | `~/campusos-worktrees/T3-gpu` | **`READY`** — worktree created |
-| 3 | ML Engineer | T4 | claude | `~/campusos-worktrees/T4-ml-baseline` | **`READY`** — worktree created |
+| 2 | GPU Infra Engineer | T3 | codex | `~/campusos-worktrees/T3-gpu` | `READY` — **deprioritised below Track 1**, not started |
+| 3 | ML Engineer | T4 | claude | `~/campusos-worktrees/T4-ml-baseline` | `READY` — **deprioritised below Track 1**, not started |
 | — | Frontend Engineer | T5 → T9 | codex | — | waiting on stable `contracts/` |
 | — | QA / Security Reviewer | checkpoints | codex / claude | — | idle (no implementation slot) |
 
-**Implementation slots in use: 3 / 3 — the limit. T5 and T9 wait for one to free.**
+**Slots: 3 / 3 reserved, 1 agent actually running.**
+
+`./scripts/agents.sh status` says `3/3` because it counts *worktrees*, and T2, T3 and T4 all
+have one. Only **T2** has an agent in it. T3 and T4 are provisioned but deliberately not
+started — the owner put finishing Track 1 ahead of them on 2026-10-24. T0b is Orchestrator
+work and consumes no slot either way.
+
+So the limit is reached on paper and there is spare capacity in practice. If T5 or T9 needs to
+start before T3/T4 do, free a slot with `./scripts/agents.sh cleanup T3` rather than
+overriding the limit — an unused worktree holding a slot is the thing to remove.
 
 ## Immediate next action
 
@@ -53,23 +63,22 @@ reports are the best account of what is sharp about these contracts. Short and s
 
 **Human, two things:**
 
-1. **Launch the three implementation agents.** T1 is merged, `contracts/` is on `main` and
-   frozen, and the worktrees exist. One command each, in its own terminal:
+1. **Accept T0b, then unblock T0c.** The Skill is built, validated and packaged; the only
+   acceptance criterion left is one nobody can meet locally — installing it on a real Cubbie
+   account, which needs the public repo to exist.
 
    ```bash
-   cd ~/campusos
-   ./scripts/agents.sh start backend T2   # Codex
-   ./scripts/agents.sh start gpu     T3   # Codex
-   ./scripts/agents.sh start ml      T4   # Claude Code
+   cd ~/campusos-worktrees/T0b-cubbie-skill
+   CUBBIE_KIT=~/path/to/cubbie-hackathon-kit ./submission/track1/build_public_repo.sh /tmp/sq
    ```
 
-   Each states its plan and waits for your go-ahead before editing anything.
-   **T3 must not touch the cluster** — there is no signed GPU approval token in its
-   assignment, and `docs/infra-policy.md` requires one.
+   Then `submission/track1/SUBMISSION.md` has the ordered checklist.
 
 2. **Supply D2** — the team roster (1–4 members, name + school email each) and which member
-   **owns** the entry. It is the last thing blocking T0b, the only mandatory deliverable, and
-   it blocks every submission.
+   **owns** the entry. It no longer blocks *building* Track 1 (that is done); it blocks
+   **publishing and submitting** it, which is T0c, and every other submission after that.
+
+T3 and T4 stay parked until Track 1 is in. T2 keeps running.
 
 ## Blocked and waiting
 
