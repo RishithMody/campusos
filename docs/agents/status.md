@@ -44,9 +44,16 @@ kept **validated and submittable on short notice**.
 | — | Frontend Engineer | T5 → T9 | codex | — | waiting on stable `contracts/` |
 | — | QA / Security Reviewer | checkpoints | codex / claude | — | idle (no implementation slot) |
 
-**Implementation slots in use: 1 / 3** — only T2 is running. T3 and T4 are provisioned but
-deliberately not started: the owner put finishing Track 1 ahead of them on 2026-10-24.
-T0b is Orchestrator work and consumes no slot.
+**Slots: 3 / 3 reserved, 1 agent actually running.**
+
+`./scripts/agents.sh status` says `3/3` because it counts *worktrees*, and T2, T3 and T4 all
+have one. Only **T2** has an agent in it. T3 and T4 are provisioned but deliberately not
+started — the owner put finishing Track 1 ahead of them on 2026-10-24. T0b is Orchestrator
+work and consumes no slot either way.
+
+So the limit is reached on paper and there is spare capacity in practice. If T5 or T9 needs to
+start before T3/T4 do, free a slot with `./scripts/agents.sh cleanup T3` rather than
+overriding the limit — an unused worktree holding a slot is the thing to remove.
 
 ## Immediate next action
 
