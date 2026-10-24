@@ -38,8 +38,8 @@ kept **validated and submittable on short notice**.
 | — | Orchestrator | T0b | claude | — | **blocked on D2** (roster + owner) |
 | — | Orchestrator | T1 | claude | `~/campusos-worktrees/T1-architecture` | **`REVIEW_WAIVED`** — merged to `main`. Not a `PASS` |
 | 1 | Backend Engineer | T2 | codex | `~/campusos-worktrees/T2-backend` | **`READY`** — worktree created |
-| 2 | GPU Infra Engineer | T3 | codex | `~/campusos-worktrees/T3-gpu-infra` | **`READY`** — worktree created |
-| 3 | ML Engineer | T4 | claude | `~/campusos-worktrees/T4-ml-eval` | **`READY`** — worktree created |
+| 2 | GPU Infra Engineer | T3 | codex | `~/campusos-worktrees/T3-gpu` | **`READY`** — worktree created |
+| 3 | ML Engineer | T4 | claude | `~/campusos-worktrees/T4-ml-baseline` | **`READY`** — worktree created |
 | — | Frontend Engineer | T5 → T9 | codex | — | waiting on stable `contracts/` |
 | — | QA / Security Reviewer | checkpoints | codex / claude | — | idle (no implementation slot) |
 
