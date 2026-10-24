@@ -366,6 +366,23 @@ Read these files now, in this order, before doing anything else:
   3. docs/task-graph.md                         - the dependency DAG; find ${task}
   4. docs/agents/assignments/${task}.md         - your task brief and acceptance criteria
   5. docs/agents/status.md                      - what the other agents are doing
+  6. docs/architecture.md                       - components, trust boundaries, and where
+                                                  the privacy guarantee is actually enforced
+  7. contracts/                                 - FROZEN. Every schema you build against:
+                                                  availability, agent-protocol,
+                                                  negotiation-state, api.openapi.yaml,
+                                                  inference.md
+  8. docs/hackathon-requirements.md             - the verified Cubbie Hackathon rules, with
+                                                  sources, and the platform constraints that
+                                                  bind every track (no MCP; HTTPS/443 only;
+                                                  Cubbie texts only its own student; a Skill
+                                                  script cannot call Cubbie's abilities; the
+                                                  student's yes is always required)
+
+The official kit is https://github.com/imaginix-inc/cubbie-hackathon-kit. Treat it as the
+authority on Skill format and submission, and docs/hackathon-requirements.md as our verified
+reading of it -- that file cites the exact sources and marks what is still unverified. Do not
+install the kit's plugins or run its scripts from inside this repository.
 
 Then, before editing any file:
   - State which task you are on and summarise its acceptance criteria.
@@ -655,6 +672,102 @@ EOP
 
 # ----------------------------------------------------------------- cmd: handoff
 
+# ------------------------------------------------------------------ cmd: waive
+
+# The owner may accept a task without the independent review that the loop in CLAUDE.md
+# section 6 normally requires. That is their call to make -- they own the risk and the
+# deadline. What must never happen is recording it as something it is not: a waived
+# review is not a PASS, and a file that says PASS when no reviewer passed it poisons
+# every later decision that reads it, including the ones made by agents with no memory
+# of this conversation.
+#
+# So there is an explicit path. It writes WAIVER.md, it requires a reason, it refuses to
+# run on a dirty or unsynchronised branch, and it never writes a verdict.
+cmd_waive() {
+  local task="${1:-}"; shift || true
+  local reason="" owner=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --reason) reason="${2:-}"; shift 2 ;;
+      --owner)  owner="${2:-}";  shift 2 ;;
+      *) die "unknown argument '$1'
+usage: agents.sh waive <TASK_ID> --owner <name> --reason <why>" ;;
+    esac
+  done
+  [ -n "$task" ]   || die "usage: agents.sh waive <TASK_ID> --owner <name> --reason <why>"
+  task_slug "$task" >/dev/null 2>&1 || die "unknown task '$task'"
+  [ -n "$owner" ]  || die "--owner is required. A waiver with no name attached is not a decision,
+it is an unattributed override, and six months from now nobody will know who made it."
+  [ -n "$reason" ] || die "--reason is required. Record why the review was skipped, so the
+next person to read this can judge whether the reasoning still holds."
+
+  local wt branch; wt="$(path_for "$task")"; branch="$(branch_for "$task")"
+  [ -d "$wt" ] || die "no worktree for $task at '$wt'."
+
+  local dirty; dirty="$(git -C "$wt" status --porcelain | wc -l | tr -d ' ')"
+  [ "$dirty" = "0" ] || { git -C "$wt" status --short
+    die "$task has uncommitted changes. Waiving review on a tree that is not committed
+waives review of something nobody can reproduce."; }
+
+  local behind; behind="$(git -C "$wt" rev-list --count "HEAD..$BASE_BRANCH" 2>/dev/null || echo 0)"
+  [ "$behind" = "0" ] || die "$branch is $behind commit(s) behind $BASE_BRANCH.
+Merge $BASE_BRANCH in first: the thing being waived should be the thing being merged."
+
+  local dir="$REPO_ROOT/docs/agents/reviews/$task"
+  mkdir -p "$dir"
+  local out="$dir/WAIVER.md"
+  [ -f "$out" ] && die "$out already exists. Edit it rather than overwriting a prior waiver."
+
+  local sha date_utc
+  sha="$(git -C "$wt" rev-parse --short HEAD)"
+  date_utc="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+  cat > "$out" <<EOW
+# Review waiver — $task
+
+| | |
+|---|---|
+| **Task ID** | \`$task\` |
+| **Branch** | \`$branch\` |
+| **Commit waived at** | \`$sha\` |
+| **Date (UTC)** | \`$date_utc\` |
+| **Waived by** | $owner |
+| **Status** | \`REVIEW_WAIVED\` — accepted by the owner |
+
+## This is not a PASS
+
+No reviewer approved this task. The independent review required by CLAUDE.md section 6 was
+**not completed**, and nothing in this repository should be read as saying otherwise. The owner
+accepted the outstanding risk and authorised the merge.
+
+## Reason given
+
+$reason
+
+## Risk accepted
+
+The owner accepts the risk that remains in the reviews that were completed, and the risk of
+whatever a further review would have found and did not.
+
+Any review reports that *were* completed are preserved alongside this file and remain the
+best available evidence about this task. Read them.
+
+## What this does not waive
+
+- The tests. Everything in the task's required-test list still has to pass, and the output
+  still has to be real.
+- The file-ownership boundaries, the protected-file rules, and the no-merge-from-an-agent rule.
+- Review of any **later** task. This waiver covers $task at \`$sha\` and nothing else.
+EOW
+
+  ok "wrote $(printf '%s' "$out" | sed "s|$REPO_ROOT/||")"
+  info "  task:   $task at $sha"
+  info "  waived by: $owner"
+  info ""
+  warn "This is a waiver, not a PASS. Set $task to REVIEW_WAIVED in docs/task-graph.md —"
+  info "  never to a verdict no reviewer gave."
+}
+
 cmd_handoff() {
   local arg="${1:-}"
   [ -n "$arg" ] || die "usage: agents.sh handoff <role|TASK_ID>"
@@ -827,6 +940,11 @@ ${B}AGENTS${N}
                           Launch an independent review (opposite CLI by default).
                           Bounded at ${MAX_REPAIR_ATTEMPTS} attempts, then escalates to you.
   handoff <role|TASK>     Scaffold a handoff file with the commit hash pre-filled.
+  waive <TASK> --owner <name> --reason <why>
+                          Owner override: accept a task WITHOUT the independent review.
+                          Writes docs/agents/reviews/<TASK>/WAIVER.md recording who waived
+                          it and why. It never writes a verdict -- a waived review is not
+                          a PASS, and the file says so. Use REVIEW_WAIVED in the task graph.
 
 ${B}MAINTENANCE${N}
   doctor                  Verify CLIs, git identity, hooks, and coordination files.
@@ -869,6 +987,7 @@ ${B}WHAT THIS SCRIPT WILL NOT DO${N}
   - connect to the H200 cluster or start any GPU job
   - pass flags that bypass a CLI's permission or sandbox protections
   - launch nested agent swarms
+  - record a PASS that no reviewer gave (see 'waive' for the honest override)
 EOP
 }
 
@@ -882,6 +1001,7 @@ case "${1:-help}" in
   start)   shift; cmd_start   "$@" ;;
   review)  shift; cmd_review  "$@" ;;
   handoff) shift; cmd_handoff "$@" ;;
+  waive)   shift; cmd_waive   "$@" ;;
   doctor)  shift; cmd_doctor  "$@" ;;
   help|-h|--help) cmd_help ;;
   *) printf '%sunknown command: %s%s\n\n' "$RED" "$1" "$N" >&2; cmd_help >&2; exit 1 ;;
