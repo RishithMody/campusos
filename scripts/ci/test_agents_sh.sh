@@ -33,6 +33,10 @@ skip() { skipped=$((skipped + 1)); printf '  SKIP  %-50s (%s)\n' "$1" "$2"; }
 # The agent CLIs are not installed on a CI runner, and the script is supposed to refuse
 # rather than pretend. Tests that need one adapt instead of failing spuriously.
 have() { command -v "$1" >/dev/null 2>&1; }
+
+# The contract validator needs PyYAML and jsonschema. The repo venv has them; a bare
+# system python does not, and the validator is supposed to refuse rather than pretend.
+if [ -x .venv/bin/python ]; then PYBIN=.venv/bin/python; else PYBIN=python3; fi
 if have claude && have codex; then HAVE_CLIS=1; else HAVE_CLIS=0; fi
 
 echo "Read-only commands"
@@ -70,10 +74,53 @@ t "T11 is not reported unknown"   1 bash -c "$A create orchestrator T11 2>&1 | g
 t "T99 is still reported unknown" 0 bash -c "$A create ml T99 2>&1 | grep -q 'unknown task'"
 
 echo "CI helper scripts"
-t "validate_contracts (pre-T1)"   0 python3 -I scripts/ci/validate_contracts.py
-t "validate_contracts --strict"   1 python3 -I scripts/ci/validate_contracts.py --strict
+t "validate_contracts runs"       0 $PYBIN scripts/ci/validate_contracts.py
+if [ -d contracts ] && [ -n "$(ls -A contracts 2>/dev/null)" ]; then
+  t "validate_contracts --strict"   0 $PYBIN scripts/ci/validate_contracts.py --strict
+else
+  t "validate_contracts --strict"   1 $PYBIN scripts/ci/validate_contracts.py --strict
+fi
 t "secret_scan --tracked"         0 ./scripts/ci/secret_scan.sh --tracked
 t "secret_scan rejects bad mode"  2 ./scripts/ci/secret_scan.sh --bogus-mode
+
+echo "Contract validator catches what it is for"
+# A validator that silently does nothing is worse than none: it reports success. These
+# assert on the three ways that can happen. Built in a temp dir so the repo is untouched.
+cdir="$(mktemp -d)/contracts"; mkdir -p "$cdir/examples/thing"
+cat > "$cdir/thing.schema.json" <<'JSON'
+{"$schema":"https://json-schema.org/draft/2020-12/schema","title":"Thing","type":"object",
+ "properties":{"id":{"type":"string"},"n":{"type":"integer","minimum":0}},
+ "required":["id","n"],"additionalProperties":false}
+JSON
+printf '{"id":"a","n":1}\n'  > "$cdir/examples/thing/valid-basic.json"
+printf '{"id":"a","n":-5}\n' > "$cdir/examples/thing/invalid-negative.json"
+t "fixtures: a correct set passes"  0 $PYBIN scripts/ci/validate_contracts.py --contracts "$cdir"
+
+# An "invalid" fixture the schema happily accepts means the schema constrains nothing.
+printf '{"id":"a","n":7}\n' > "$cdir/examples/thing/invalid-negative.json"
+t "fixtures: unrejected negative"   1 $PYBIN scripts/ci/validate_contracts.py --contracts "$cdir"
+printf '{"id":"a","n":-5}\n' > "$cdir/examples/thing/invalid-negative.json"
+
+# A valid fixture that does not validate means schema and examples have drifted apart.
+printf '{"id":"a"}\n' > "$cdir/examples/thing/valid-basic.json"
+t "fixtures: broken positive"       1 $PYBIN scripts/ci/validate_contracts.py --contracts "$cdir"
+printf '{"id":"a","n":1}\n' > "$cdir/examples/thing/valid-basic.json"
+
+# A schema nobody exercised is a guess.
+rm -rf "$cdir/examples/thing"
+t "fixtures: none at all"           1 $PYBIN scripts/ci/validate_contracts.py --contracts "$cdir"
+mkdir -p "$cdir/examples/thing"
+printf '{"id":"a","n":1}\n'  > "$cdir/examples/thing/valid-basic.json"
+printf '{"id":"a","n":-5}\n' > "$cdir/examples/thing/invalid-negative.json"
+
+# Missing dependencies must be an explicit failure, never a silent skip. A bare system
+# python has neither jsonschema nor PyYAML, so this must refuse.
+if python3 -I -c "import jsonschema" 2>/dev/null; then
+  skip "deps missing is a hard failure" "system python3 already has jsonschema"
+else
+  t "deps missing is a hard failure" 1 python3 -I scripts/ci/validate_contracts.py --contracts "$cdir"
+fi
+rm -rf "$(dirname "$cdir")"
 
 echo "Secret scan actually catches secrets"
 tmp="$(mktemp -d)"

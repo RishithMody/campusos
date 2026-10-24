@@ -5,13 +5,28 @@ Three agents build against these files in parallel from sessions with no shared 
 so a malformed or self-contradictory contract is one of the most expensive failures
 available to this project. This check runs in CI and in T1's definition of done.
 
+What it checks:
+  1. every contract file parses (JSON Schema, OpenAPI YAML);
+  2. every schema is itself a legal JSON Schema;
+  3. the agent envelope carries the fields needed to route a message safely;
+  4. each schema has at least one valid and one deliberately invalid example fixture,
+     the valid one validates, and **the invalid one is actually rejected**.
+
 Exits 0 and says so plainly when contracts/ does not exist yet -- a missing contract
 before T1 is the expected state, not a failure.
 
-Usage:
-    ./scripts/ci/validate_contracts.py [--strict]
+Dependencies (PyYAML, jsonschema) are required whenever there is something that needs
+them. A missing dependency is a hard FAIL, never a silent skip: a validator that quietly
+does nothing is worse than no validator, because it reports success.
 
-    --strict  fail if contracts/ is missing or empty (use after T1 is DONE)
+    ./scripts/ci/validate_contracts.py            # from the repo's .venv
+    .venv/bin/python scripts/ci/validate_contracts.py
+
+    --strict            fail if contracts/ is missing or empty (use after T1 is DONE)
+    --contracts <dir>   check this directory instead of contracts/ (used by the tests)
+
+Set up the environment with:
+    uv venv --python 3.11 .venv && uv pip install --python .venv/bin/python pyyaml jsonschema
 """
 
 from __future__ import annotations
@@ -22,6 +37,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 CONTRACTS = ROOT / "contracts"
+EXAMPLES = CONTRACTS / "examples"
 
 # Fields the agent-protocol envelope must carry. Derived from the privacy model: a message
 # is only safe to route if we know who sent it, who they speak for, how far their authority
@@ -36,53 +52,162 @@ REQUIRED_ENVELOPE_FIELDS = {
     "trace_id",
 }
 
+SETUP_HINT = (
+    "install it with:  uv pip install --python .venv/bin/python pyyaml jsonschema\n"
+    "         then run: .venv/bin/python scripts/ci/validate_contracts.py"
+)
+
 errors: list[str] = []
 warnings: list[str] = []
 checked = 0
 
 
-def check_json_schema(path: Path) -> dict | None:
+def rel(path: Path) -> str:
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
+def load_json(path: Path) -> dict | None:
     global checked
     try:
         data = json.loads(path.read_text())
     except json.JSONDecodeError as exc:
-        errors.append(f"{path.relative_to(ROOT)}: invalid JSON -- {exc}")
+        errors.append(f"{rel(path)}: invalid JSON -- {exc}")
         return None
     checked += 1
-
     if not isinstance(data, dict):
-        errors.append(f"{path.relative_to(ROOT)}: top level must be an object")
+        errors.append(f"{rel(path)}: top level must be an object")
         return None
-    if "$schema" not in data:
-        warnings.append(f"{path.relative_to(ROOT)}: no $schema key; declare the JSON Schema draft")
-    if "title" not in data:
-        warnings.append(f"{path.relative_to(ROOT)}: no title")
-    if data.get("type") == "object" and "properties" not in data:
-        errors.append(f"{path.relative_to(ROOT)}: type 'object' with no properties")
     return data
 
 
-def check_yaml(path: Path) -> dict | None:
+def check_schema_shape(path: Path, data: dict) -> None:
+    """House rules that keep a schema usable by an agent reading it cold."""
+    if "$schema" not in data:
+        warnings.append(f"{rel(path)}: no $schema key; declare the JSON Schema draft")
+    if "title" not in data:
+        warnings.append(f"{rel(path)}: no title")
+    if data.get("type") == "object" and "properties" not in data:
+        errors.append(f"{rel(path)}: type 'object' with no properties")
+
+    if path.name == "agent-protocol.schema.json":
+        props = set((data.get("properties") or {}).keys())
+        missing = REQUIRED_ENVELOPE_FIELDS - props
+        if missing:
+            errors.append(
+                f"{rel(path)}: agent envelope is missing required field(s): "
+                f"{', '.join(sorted(missing))}. These are needed to route a message safely "
+                "(identity, authority, disclosure limit, traceability)."
+            )
+        disclosure = (data.get("properties") or {}).get("disclosure_level") or {}
+        if "enum" not in disclosure:
+            errors.append(
+                f"{rel(path)}: disclosure_level must be an enum. The privacy tests in T2, T4 "
+                "and T5 are written against these values."
+            )
+
+
+def check_yaml(path: Path) -> None:
     global checked
     try:
-        import yaml  # type: ignore
+        import yaml
     except ImportError:
-        warnings.append(
-            f"{path.relative_to(ROOT)}: SKIPPED -- PyYAML not installed "
-            "(pip install pyyaml to validate this file)"
+        errors.append(
+            f"{rel(path)}: cannot validate -- PyYAML is not installed, so this OpenAPI "
+            f"document was NOT checked.\n         {SETUP_HINT}"
         )
-        return None
+        return
     try:
         data = yaml.safe_load(path.read_text())
     except Exception as exc:  # noqa: BLE001 - surface any parser error verbatim
-        errors.append(f"{path.relative_to(ROOT)}: invalid YAML -- {exc}")
-        return None
+        errors.append(f"{rel(path)}: invalid YAML -- {exc}")
+        return
     checked += 1
-    return data if isinstance(data, dict) else None
+    if not isinstance(data, dict):
+        errors.append(f"{rel(path)}: OpenAPI document must be a mapping at the top level")
+        return
+    if "openapi" in path.name:
+        for key in ("openapi", "info", "paths"):
+            if key not in data:
+                errors.append(f"{rel(path)}: OpenAPI doc missing '{key}'")
+
+
+def check_fixtures(schema_path: Path, schema: dict) -> None:
+    """Each schema needs a valid fixture AND one that is correctly rejected.
+
+    A schema nobody has exercised is a guess. The negative fixture is the one that
+    actually matters: it proves the schema constrains something.
+    """
+    try:
+        import jsonschema
+    except ImportError:
+        errors.append(
+            f"{rel(schema_path)}: cannot validate -- jsonschema is not installed, so this "
+            f"schema and its fixtures were NOT checked.\n         {SETUP_HINT}"
+        )
+        return
+
+    stem = schema_path.name.removesuffix(".schema.json")
+    folder = EXAMPLES / stem
+
+    validator_cls = jsonschema.validators.validator_for(schema)
+    try:
+        validator_cls.check_schema(schema)
+    except jsonschema.exceptions.SchemaError as exc:
+        errors.append(f"{rel(schema_path)}: not a legal JSON Schema -- {exc.message}")
+        return
+    validator = validator_cls(schema)
+
+    if not folder.is_dir():
+        errors.append(
+            f"{rel(schema_path)}: no example fixtures. Create {rel(folder)}/valid-*.json "
+            "and invalid-*.json -- a schema with no exercised examples is a guess."
+        )
+        return
+
+    valid = sorted(folder.glob("valid-*.json"))
+    invalid = sorted(folder.glob("invalid-*.json"))
+    if not valid:
+        errors.append(f"{rel(folder)}: no valid-*.json fixture")
+    if not invalid:
+        errors.append(
+            f"{rel(folder)}: no invalid-*.json fixture. The deliberately-invalid case is "
+            "what proves the schema rejects anything at all."
+        )
+
+    for fixture in valid:
+        data = load_json(fixture)
+        if data is None:
+            continue
+        found = sorted(validator.iter_errors(data), key=lambda e: list(e.path))
+        if found:
+            first = found[0]
+            where = "/".join(str(p) for p in first.path) or "(root)"
+            errors.append(
+                f"{rel(fixture)}: expected to VALIDATE against {schema_path.name} but failed "
+                f"at {where}: {first.message}"
+            )
+
+    for fixture in invalid:
+        data = load_json(fixture)
+        if data is None:
+            continue
+        if validator.is_valid(data):
+            errors.append(
+                f"{rel(fixture)}: expected to be REJECTED by {schema_path.name}, but it "
+                "validated. Either the fixture is not actually invalid, or the schema is "
+                "too permissive -- both are bugs other agents will build on."
+            )
 
 
 def main() -> int:
+    global CONTRACTS, EXAMPLES
     strict = "--strict" in sys.argv
+    if "--contracts" in sys.argv:
+        CONTRACTS = Path(sys.argv[sys.argv.index("--contracts") + 1]).resolve()
+        EXAMPLES = CONTRACTS / "examples"
 
     if not CONTRACTS.is_dir():
         msg = "contracts/ does not exist yet -- it is produced by T1 (architecture and contracts)."
@@ -101,34 +226,35 @@ def main() -> int:
         print(f"SKIP: {msg}")
         return 0
 
+    schemas: list[tuple[Path, dict]] = []
+
     for path in files:
+        # Fixtures are instances, not schemas. They are checked against their schema below.
+        if EXAMPLES in path.parents:
+            if path.suffix != ".json":
+                warnings.append(f"{rel(path)}: unexpected non-JSON file among the fixtures")
+            continue
+
         if path.suffix == ".json":
-            data = check_json_schema(path)
-            if data and path.name == "agent-protocol.schema.json":
-                props = set((data.get("properties") or {}).keys())
-                missing = REQUIRED_ENVELOPE_FIELDS - props
-                if missing:
-                    errors.append(
-                        f"{path.relative_to(ROOT)}: agent envelope is missing required "
-                        f"field(s): {', '.join(sorted(missing))}. These are needed to route a "
-                        "message safely (identity, authority, disclosure limit, traceability)."
-                    )
-                disclosure = (data.get("properties") or {}).get("disclosure_level") or {}
-                if "enum" not in disclosure:
-                    errors.append(
-                        f"{path.relative_to(ROOT)}: disclosure_level must be an enum. "
-                        "The privacy tests in T2, T4, and T5 are written against these values."
-                    )
+            data = load_json(path)
+            if data is None:
+                continue
+            check_schema_shape(path, data)
+            if path.name.endswith(".schema.json"):
+                schemas.append((path, data))
+            else:
+                warnings.append(
+                    f"{rel(path)}: name it <thing>.schema.json so its fixtures can be found"
+                )
         elif path.suffix in (".yaml", ".yml"):
-            data = check_yaml(path)
-            if data and "openapi" in path.name:
-                for key in ("openapi", "info", "paths"):
-                    if key not in data:
-                        errors.append(f"{path.relative_to(ROOT)}: OpenAPI doc missing '{key}'")
+            check_yaml(path)
         elif path.suffix == ".md":
             continue
         else:
-            warnings.append(f"{path.relative_to(ROOT)}: unrecognised contract file type")
+            warnings.append(f"{rel(path)}: unrecognised contract file type")
+
+    for schema_path, schema in schemas:
+        check_fixtures(schema_path, schema)
 
     for w in warnings:
         print(f"WARN  {w}")
@@ -136,7 +262,8 @@ def main() -> int:
         print(f"ERROR {e}")
 
     print(
-        f"\n{checked} contract file(s) parsed, {len(errors)} error(s), {len(warnings)} warning(s)"
+        f"\n{checked} contract file(s) parsed, {len(schemas)} schema(s) exercised against "
+        f"fixtures, {len(errors)} error(s), {len(warnings)} warning(s)"
     )
     return 1 if errors else 0
 

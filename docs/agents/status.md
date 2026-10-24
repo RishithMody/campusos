@@ -34,7 +34,7 @@ kept **validated and submittable on short notice**.
 
 | Slot | Agent | Task | CLI | Worktree | State |
 |---|---|---|---|---|---|
-| — | Orchestrator | T0 | claude | `~/campusos` (primary) | **`REVIEW`** — findings delivered |
+| — | Orchestrator | T0 | claude | `~/campusos` (primary) | **`DONE`** — signed off 2026-10-24 |
 | — | Orchestrator | T0b | claude | — | **blocked on D2** (roster + owner) |
 | — | Orchestrator | T1 | claude | — | **ready to start** |
 | 1 | Backend Engineer | T2 | codex | — | waiting on T1 |
@@ -91,7 +91,7 @@ in either order. T1 is unblocked now; T0b needs D2.
 
 | Task | Attempts used | Verdict | Escalated |
 |---|---|---|---|
-| T0 | 0 | awaiting human review | no |
+| T0 | 0 | approved by the human 2026-10-24 | no |
 
 The loop is bounded at **3** repair attempts per task; the fourth attempt is refused and
 `docs/agents/reviews/<TASK>/ESCALATION.md` is written instead.

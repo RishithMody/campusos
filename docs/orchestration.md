@@ -15,7 +15,17 @@ merges.
 
 ```bash
 cd ~/campusos
+uv venv --python 3.11 .venv
+uv pip install --python .venv/bin/python pyyaml jsonschema
 ./scripts/agents.sh doctor
+```
+
+The venv is gitignored and holds what the contract validator needs. **The validator fails loudly
+without PyYAML and jsonschema rather than skipping** — a check that quietly does nothing is worse
+than no check, because it reports success. Run it as:
+
+```bash
+.venv/bin/python scripts/ci/validate_contracts.py
 ```
 
 `doctor` checks both CLIs, your Git identity, the hooks, and every coordination file. Fix

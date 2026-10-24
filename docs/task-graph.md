@@ -77,7 +77,7 @@ the Track 2 agent-to-agent message, and the Track 3 group-chat payload. The back
 
 | ID | Task | Track | Agent | CLI | Depends on | Status |
 |---|---|---|---|---|---|---|
-| T0 | Verify hackathon requirements | all | Orchestrator | Claude Code | — | `REVIEW` |
+| T0 | Verify hackathon requirements | all | Orchestrator | Claude Code | — | `DONE` |
 | T0b | **Track 1 Cubbie Skill + submission** | 1 | Orchestrator | Claude Code | T0 + **D2** | `BLOCKED` (D2) |
 | T1 | Architecture & shared contracts | all | Orchestrator | Claude Code | — | `READY` |
 | T2 | Backend implementation | 1·2·3 | Backend Engineer | Codex | T1 | `BLOCKED` |
@@ -101,7 +101,7 @@ deliverable, and it unlocks the other two tracks. Do not let the product build d
 |---|---|
 | **Agent** | Orchestrator (Claude Code) |
 | **Depends on** | — |
-| **Status** | `REVIEW` — findings complete, awaiting human sign-off on D1–D5 |
+| **Status** | `DONE` — human signed off 2026-10-24 |
 | **Branch / worktree** | `main` in `~/campusos` (docs only) |
 | **Owns** | `docs/hackathon-requirements.md` |
 
@@ -119,8 +119,8 @@ deliverable, and it unlocks the other two tracks. Do not let the product build d
 ### Required tests
 None (documentation task). Verification = every claim carries a source URL and a date.
 
-**Why it is `REVIEW`, not `DONE`:** the reviewer for T0 is the human, and five decisions
-(D1–D5) are theirs to make. The Orchestrator does not self-certify a facts task.
+**Signed off by the human on 2026-10-24.** D1, D3, D4 and D5 were decided at the same time;
+D2 (team roster and entry owner) remains open and blocks submission, not architecture.
 
 ---
 
