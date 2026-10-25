@@ -86,7 +86,7 @@ the Track 2 agent-to-agent message, and the Track 3 group-chat payload. The back
 | T4 | ML evaluation baseline | 2 | ML Engineer | Claude Code | T1 | `READY` |
 | T5 | Frontend: negotiation visualisation | 2 | Frontend Engineer | Codex | T1 + stable `contracts/` | `BLOCKED` (queued) |
 | T6 | Optional LoRA fine-tuning | 2 | ML Engineer | Claude Code | T3, T4 | `BLOCKED` |
-| T7a | **Live verification: real Discord, PostgreSQL, Redis** | 2·3 | QA / Security Reviewer | Codex | T2, T9 | `READY` |
+| T7a | **Live verification: PostgreSQL + Redis** | 2·3 | QA / Security Reviewer | Codex | T2, T9 | `REVIEW` |
 | T7 | End-to-end integration (full stack) | 2 | QA / Orchestrator | Codex + Claude Code | T2, T3, T5, T9 | `BLOCKED` |
 | T8 | Final demo & all-track submission check | all | Orchestrator | Claude Code | T0b, T10, T11 | `BLOCKED` |
 | T9 | **Track 3 group chat assistant (Discord)** | 3 | Frontend Engineer | Codex | T1, T2 | `DONE` |
