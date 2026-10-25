@@ -60,9 +60,25 @@ def test_c9_corpus_covers_every_template():
 
 
 @pytest.mark.privacy
+def test_c9_every_case_declares_where_its_expectation_came_from():
+    """Review finding 5. Most cases come from the contract; the converged ones do not.
+
+    The contract fixes `{agreed_slot}`'s timezone but not its format or separator, so
+    those two expectations pin our renderer rather than the contract. Saying otherwise
+    in the artifact handed to connector authors would misrepresent what they must match.
+    """
+    for case in CORPUS["cases"]:
+        assert case["provenance"], case["id"]
+        contract_derived = case["summary"]["template_id"] != "converged"
+        assert contract_derived == case["provenance"].startswith("frozen contract"), case["id"]
+
+
+@pytest.mark.privacy
 @pytest.mark.parametrize("case", CORPUS["cases"], ids=lambda c: c["id"])
 def test_c9_reference_renderer_matches_the_corpus(case):
-    """C9, our half. The corpus is hand-written from the contract, so this is not circular."""
+    """C9, our half. Hand-written from the contract, so not circular -- except the two
+    converged cases, whose `{agreed_slot}` formatting the contract never specifies and
+    which therefore pin the reference implementation. Each case says which it is."""
     if case.get("expect_refused"):
         with pytest.raises(ValueError):
             render(case["summary"], case["summary"]["negotiation_id"])

@@ -1,73 +1,186 @@
 {
   "about": [
     "Renderer conformance corpus for any CampusOS Discord connector (T7c / case C9).",
-    "Expected strings are written by hand from the nine-row template table in the",
-    "ChannelSummary description of contracts/api.openapi.yaml -- not generated from",
-    "our renderer, which would make the check circular.",
-    "A connector conforms when, for every case, it produces exactly `expect_text`,",
-    "or refuses to render when `expect_refused` is true. Byte equality, en dash and all."
+    "Sentences come from the nine-row template table in the ChannelSummary description of",
+    "contracts/api.openapi.yaml, typed out by hand -- not generated from our renderer,",
+    "which would make the check circular.",
+    "EXCEPTION, read this before implementing: the frozen contract specifies that",
+    "{agreed_slot} is formatted in the channel's own timezone, but it does NOT specify the",
+    "format. The two 'converged' cases therefore pin the REFERENCE IMPLEMENTATION",
+    "(groupchat/render.py): '%Y-%m-%d %H:%M %Z' for each endpoint, joined by an EN DASH",
+    "(U+2013) with a space either side. That is compatibility with us, not conformance to",
+    "the contract, and it is pending a decision by the CampusOS Orchestrator. Every other",
+    "case is contract-derived.",
+    "A connector conforms when, for every case, it produces exactly `expect_text`, or",
+    "refuses to render when `expect_refused` is true. Byte equality."
   ],
   "cases": [
     {
       "id": "gathering-3",
-      "summary": {"negotiation_id": "neg_1234567890abcdef", "status": "gathering", "round": 0, "max_rounds": 5, "template_id": "gathering_availability", "participant_count": 3},
-      "expect_text": "Collecting availability from 3 people."
+      "summary": {
+        "negotiation_id": "neg_1234567890abcdef",
+        "status": "gathering",
+        "round": 0,
+        "max_rounds": 5,
+        "template_id": "gathering_availability",
+        "participant_count": 3
+      },
+      "expect_text": "Collecting availability from 3 people.",
+      "provenance": "frozen contract: ChannelSummary template table"
     },
     {
       "id": "gathering-2",
-      "summary": {"negotiation_id": "neg_1234567890abcdef", "status": "gathering", "round": 0, "max_rounds": 20, "template_id": "gathering_availability", "participant_count": 2},
-      "expect_text": "Collecting availability from 2 people."
+      "summary": {
+        "negotiation_id": "neg_1234567890abcdef",
+        "status": "gathering",
+        "round": 0,
+        "max_rounds": 20,
+        "template_id": "gathering_availability",
+        "participant_count": 2
+      },
+      "expect_text": "Collecting availability from 2 people.",
+      "provenance": "frozen contract: ChannelSummary template table"
     },
     {
       "id": "proposal-round-1",
-      "summary": {"negotiation_id": "neg_1234567890abcdef", "status": "negotiating", "round": 1, "max_rounds": 5, "template_id": "proposal_on_table", "participant_count": 3},
-      "expect_text": "There's a time on the table -- round 1 of 5."
+      "summary": {
+        "negotiation_id": "neg_1234567890abcdef",
+        "status": "negotiating",
+        "round": 1,
+        "max_rounds": 5,
+        "template_id": "proposal_on_table",
+        "participant_count": 3
+      },
+      "expect_text": "There's a time on the table -- round 1 of 5.",
+      "provenance": "frozen contract: ChannelSummary template table"
     },
     {
       "id": "proposal-last-round",
-      "summary": {"negotiation_id": "neg_1234567890abcdef", "status": "negotiating", "round": 5, "max_rounds": 5, "template_id": "proposal_on_table", "participant_count": 4},
-      "expect_text": "There's a time on the table -- round 5 of 5."
+      "summary": {
+        "negotiation_id": "neg_1234567890abcdef",
+        "status": "negotiating",
+        "round": 5,
+        "max_rounds": 5,
+        "template_id": "proposal_on_table",
+        "participant_count": 4
+      },
+      "expect_text": "There's a time on the table -- round 5 of 5.",
+      "provenance": "frozen contract: ChannelSummary template table"
     },
     {
       "id": "awaiting",
-      "summary": {"negotiation_id": "neg_1234567890abcdef", "status": "awaiting_approval", "round": 2, "max_rounds": 5, "template_id": "awaiting_approvals", "participant_count": 3},
-      "expect_text": "Waiting on everyone to confirm."
+      "summary": {
+        "negotiation_id": "neg_1234567890abcdef",
+        "status": "awaiting_approval",
+        "round": 2,
+        "max_rounds": 5,
+        "template_id": "awaiting_approvals",
+        "participant_count": 3
+      },
+      "expect_text": "Waiting on everyone to confirm.",
+      "provenance": "frozen contract: ChannelSummary template table"
     },
     {
       "id": "converged-utc",
-      "summary": {"negotiation_id": "neg_1234567890abcdef", "status": "converged", "round": 2, "max_rounds": 5, "template_id": "converged", "participant_count": 3, "timezone": "UTC", "agreed_slot": {"start": "2026-10-25T19:00:00Z", "end": "2026-10-25T20:00:00Z"}},
-      "expect_text": "Locked in: 2026-10-25 19:00 UTC – 2026-10-25 20:00 UTC."
+      "summary": {
+        "negotiation_id": "neg_1234567890abcdef",
+        "status": "converged",
+        "round": 2,
+        "max_rounds": 5,
+        "template_id": "converged",
+        "participant_count": 3,
+        "timezone": "UTC",
+        "agreed_slot": {
+          "start": "2026-10-25T19:00:00Z",
+          "end": "2026-10-25T20:00:00Z"
+        }
+      },
+      "expect_text": "Locked in: 2026-10-25 19:00 UTC – 2026-10-25 20:00 UTC.",
+      "provenance": "reference-implementation compatibility: the contract does not specify the agreed_slot format or separator. See `about`."
     },
     {
       "id": "converged-phoenix",
-      "summary": {"negotiation_id": "neg_1234567890abcdef", "status": "converged", "round": 3, "max_rounds": 5, "template_id": "converged", "participant_count": 3, "timezone": "America/Phoenix", "agreed_slot": {"start": "2026-10-25T19:00:00Z", "end": "2026-10-25T20:00:00Z"}},
-      "expect_text": "Locked in: 2026-10-25 12:00 MST – 2026-10-25 13:00 MST."
+      "summary": {
+        "negotiation_id": "neg_1234567890abcdef",
+        "status": "converged",
+        "round": 3,
+        "max_rounds": 5,
+        "template_id": "converged",
+        "participant_count": 3,
+        "timezone": "America/Phoenix",
+        "agreed_slot": {
+          "start": "2026-10-25T19:00:00Z",
+          "end": "2026-10-25T20:00:00Z"
+        }
+      },
+      "expect_text": "Locked in: 2026-10-25 12:00 MST – 2026-10-25 13:00 MST.",
+      "provenance": "reference-implementation compatibility: the contract does not specify the agreed_slot format or separator. See `about`."
     },
     {
       "id": "failed-no-overlap",
-      "summary": {"negotiation_id": "neg_1234567890abcdef", "status": "failed", "round": 3, "max_rounds": 5, "template_id": "failed_no_overlap", "participant_count": 3},
-      "expect_text": "No time works for everyone in this window."
+      "summary": {
+        "negotiation_id": "neg_1234567890abcdef",
+        "status": "failed",
+        "round": 3,
+        "max_rounds": 5,
+        "template_id": "failed_no_overlap",
+        "participant_count": 3
+      },
+      "expect_text": "No time works for everyone in this window.",
+      "provenance": "frozen contract: ChannelSummary template table"
     },
     {
       "id": "failed-max-rounds",
-      "summary": {"negotiation_id": "neg_1234567890abcdef", "status": "failed", "round": 5, "max_rounds": 5, "template_id": "failed_max_rounds", "participant_count": 3},
-      "expect_text": "No time found in 5 rounds -- over to you."
+      "summary": {
+        "negotiation_id": "neg_1234567890abcdef",
+        "status": "failed",
+        "round": 5,
+        "max_rounds": 5,
+        "template_id": "failed_max_rounds",
+        "participant_count": 3
+      },
+      "expect_text": "No time found in 5 rounds -- over to you.",
+      "provenance": "frozen contract: ChannelSummary template table"
     },
     {
       "id": "expired",
-      "summary": {"negotiation_id": "neg_1234567890abcdef", "status": "expired", "round": 1, "max_rounds": 5, "template_id": "expired", "participant_count": 3},
-      "expect_text": "This one timed out."
+      "summary": {
+        "negotiation_id": "neg_1234567890abcdef",
+        "status": "expired",
+        "round": 1,
+        "max_rounds": 5,
+        "template_id": "expired",
+        "participant_count": 3
+      },
+      "expect_text": "This one timed out.",
+      "provenance": "frozen contract: ChannelSummary template table"
     },
     {
       "id": "cancelled",
-      "summary": {"negotiation_id": "neg_1234567890abcdef", "status": "cancelled", "round": 1, "max_rounds": 5, "template_id": "cancelled", "participant_count": 3},
-      "expect_text": "Someone withdrew, so this is off."
+      "summary": {
+        "negotiation_id": "neg_1234567890abcdef",
+        "status": "cancelled",
+        "round": 1,
+        "max_rounds": 5,
+        "template_id": "cancelled",
+        "participant_count": 3
+      },
+      "expect_text": "Someone withdrew, so this is off.",
+      "provenance": "frozen contract: ChannelSummary template table"
     },
     {
       "id": "consent-withdrawn-is-unreachable",
-      "summary": {"negotiation_id": "neg_1234567890abcdef", "status": "cancelled", "round": 1, "max_rounds": 5, "template_id": "consent_withdrawn", "participant_count": 3},
+      "summary": {
+        "negotiation_id": "neg_1234567890abcdef",
+        "status": "cancelled",
+        "round": 1,
+        "max_rounds": 5,
+        "template_id": "consent_withdrawn",
+        "participant_count": 3
+      },
       "expect_refused": true,
-      "why": "The backend never emits this id: withdrawal is a uniform 403 and silence, never an announcement. It exists in the enum so neither side treats the list as open. A connector must refuse it rather than invent the sentence."
+      "why": "The backend never emits this id: withdrawal is a uniform 403 and silence, never an announcement. It exists in the enum so neither side treats the list as open. A connector must refuse it rather than invent the sentence.",
+      "provenance": "frozen contract: ChannelSummary template table"
     }
   ]
 }

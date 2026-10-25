@@ -5,6 +5,10 @@ people can read a room, and therefore what channel consent is consented *to* -- 
 tests at all. `can_view` was pinned against fixtures; the HTTP client around it was not.
 
 Everything here uses `httpx.MockTransport`. No Discord connection, no token.
+
+Two cases exist because review attempt 1 found the mutants they kill. An audience that
+is wrong *downwards* is the dangerous direction: it cannot trip the audience-growth
+re-consent rule, so a room can quietly grow past what anyone consented to.
 """
 
 import asyncio
@@ -15,20 +19,39 @@ import pytest
 from backend.channels.discord import VIEW_CHANNEL, DiscordREST
 from backend.common import Problem
 
+UNSET = object()
 GUILD = "123"
 CHANNEL = "456"
 BOT = "900"
 TOKEN = "a-fake-bot-token-that-must-never-be-echoed"  # noqa: S105  pragma: allowlist secret
 
 
-def world(members, *, channel_type=0, guild_id=GUILD, everyone=VIEW_CHANNEL, status=200, owner="1"):
+def world(
+    members,
+    *,
+    channel_type=0,
+    guild_id=GUILD,
+    everyone=VIEW_CHANNEL,
+    status=200,
+    owner="1",
+    roles=(),
+    overwrites=(),
+    channel_document=None,
+    members_page=UNSET,
+):
     """A minimal Discord, serving exactly the four endpoints DiscordREST calls."""
     guild = {
         "id": GUILD,
         "owner_id": owner,
-        "roles": [{"id": GUILD, "permissions": str(everyone)}],
+        "roles": [{"id": GUILD, "permissions": str(everyone)}, *roles],
     }
-    channel = {"guild_id": guild_id, "type": channel_type, "permission_overwrites": []}
+    channel = {
+        "guild_id": guild_id,
+        "type": channel_type,
+        "permission_overwrites": list(overwrites),
+    }
+    if channel_document is not None:
+        channel = channel_document
 
     def handle(request):
         path = request.url.path
@@ -45,6 +68,8 @@ def world(members, *, channel_type=0, guild_id=GUILD, everyone=VIEW_CHANNEL, sta
                 return httpx.Response(404, json={})
             return httpx.Response(status, json=found)
         if path.endswith("/members"):
+            if members_page is not UNSET:
+                return httpx.Response(status, json=members_page)
             after = int(request.url.params.get("after", 0))
             page = [m for m in members if int(m["user"]["id"]) > after][:1000]
             return httpx.Response(status, json=page)
@@ -65,6 +90,9 @@ def client(transport, token=TOKEN):
     return DiscordREST(token, transport=transport)
 
 
+# ------------------------------------------------------------------ counting correctly
+
+
 def test_audience_counts_only_members_who_can_view():
     people = [member(BOT), member("1"), member("2"), member("3")]
     audience = run(client(world(people)).audience(CHANNEL, GUILD))
@@ -72,21 +100,28 @@ def test_audience_counts_only_members_who_can_view():
     assert audience.guild == GUILD
 
 
-def test_audience_excludes_members_who_cannot_view():
-    """@everyone denied VIEW_CHANNEL. The bot owns the guild, so only it can read the room.
+def test_audience_excludes_members_denied_by_a_role_overwrite():
+    """The bot can view; one member's role is denied. The count must drop to the readers."""
+    denied = [{"id": "r1", "type": 0, "deny": str(VIEW_CHANNEL), "allow": "0"}]
+    people = [member(BOT), member("2", roles=["r1"]), member("3")]
+    audience = run(
+        client(world(people, roles=[{"id": "r1", "permissions": "0"}], overwrites=denied)).audience(
+            CHANNEL, GUILD
+        )
+    )
+    assert audience.size == 2
 
-    This is the number consent is given against: if it counted members who cannot see the
-    channel, the audience-growth re-consent rule would fire on people who can read nothing.
-    """
-    people = [member(BOT), member("1"), member("2")]
-    audience = run(client(world(people, everyone=0, owner=BOT)).audience(CHANNEL, GUILD))
-    assert audience.size == 1
 
-
-def test_audience_paginates_and_deduplicates():
+def test_audience_pages_beyond_one_request_and_deduplicates():
     people = [member(BOT)] + [member(str(i)) for i in range(1000, 2500)]
     audience = run(client(world(people)).audience(CHANNEL, GUILD))
     assert audience.size == len(people)
+    # The same id served twice must be counted once; the implementation uses a set.
+    duplicated = people + [member("1000")]
+    assert run(client(world(duplicated)).audience(CHANNEL, GUILD)).size == len(people)
+
+
+# ---------------------------------------------------------------------- failing closed
 
 
 @pytest.mark.parametrize(
@@ -119,12 +154,25 @@ def test_a_non_200_from_discord_is_never_treated_as_success(status):
     assert caught.value.status == 403
 
 
-def test_a_bot_that_cannot_see_the_channel_is_refused():
-    """The bot's own view permission is checked before any audience is computed."""
-    people = [member("1")]  # the bot is not a member at all
+def test_a_bot_that_is_a_member_but_cannot_view_the_channel_is_refused():
+    """Review finding 4. Every response is 200 and the bot's membership exists.
+
+    The only thing that can refuse here is the bot's own VIEW_CHANNEL check. The previous
+    version of this test supplied no bot membership at all, so a 404 refused first and
+    removing the permission check left the whole suite green.
+    """
+    people = [member(BOT), member("1")]
+    with pytest.raises(Problem) as caught:
+        run(client(world(people, everyone=0)).audience(CHANNEL, GUILD))
+    assert caught.value.status == 403
+
+
+def test_a_bot_that_is_not_a_member_at_all_is_refused():
+    """Kept separate from the case above: a missing member is not a denied member."""
+    people = [member("1")]
     with pytest.raises(Problem) as caught:
         run(client(world(people)).audience(CHANNEL, GUILD))
-    assert caught.value.status in {403, 503}
+    assert caught.value.status == 403
 
 
 @pytest.mark.parametrize("channel,guild", [("abc", GUILD), (CHANNEL, "abc"), ("", "")])
@@ -148,11 +196,60 @@ def test_a_missing_token_fails_closed_rather_than_skipping_verification():
     assert caught.value.status == 503
 
 
-def test_a_malformed_member_page_fails_closed():
+# -------------------------------------------------------------- malformed member pages
+
+
+@pytest.mark.parametrize(
+    "name,page",
+    [
+        ("empty object", {}),
+        ("empty string", ""),
+        ("object with keys", {"not": "a list"}),
+        ("json null", None),
+        ("integer", 7),
+        ("list of strings", ["alice", "bob"]),
+    ],
+)
+def test_a_malformed_member_page_fails_closed(name, page):
+    """Review finding 3, and the reason the suite needed it.
+
+    `{}` is the dangerous one. A non-empty object raises `TypeError` deeper in and is
+    converted to a 503 by the surrounding handler, so the explicit list check looks
+    redundant. An **empty** object iterates zero times, reaches `len(members) < 1000`,
+    and returns a perfectly well-formed audience of **size 0** -- an undercount, which
+    can never trip the re-consent rule. That made the guard load-bearing, and the
+    `equivalent mutant` claim in attempt 1 wrong.
+    """
+    with pytest.raises(Problem) as caught:
+        run(client(world([member(BOT)], members_page=page)).audience(CHANNEL, GUILD))
+    assert caught.value.status == 503, name
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "Open defect found in review attempt 2: an EMPTY member list is a well-formed "
+        "list, so the isinstance guard passes and audience() returns size 0. The bot "
+        "itself must be able to view the channel -- context() already insisted -- so "
+        "zero is arithmetically impossible and means the page was not understood. "
+        "Dangerous direction: channel_summary only re-asks for consent when the audience "
+        "GREW, so an undercount lets posting continue through a room that has grown. "
+        "Production is out of scope for this repair; raised for the Orchestrator. "
+        "Strict, so this flips to a failure the moment production is fixed."
+    ),
+)
+def test_an_audience_of_zero_is_never_returned():
+    """The property stated directly, independent of how the page was malformed."""
+    audience = run(client(world([member(BOT)], members_page=[])).audience(CHANNEL, GUILD))
+    assert audience.size > 0
+
+
+def test_a_stalled_pagination_cursor_fails_closed():
+    """A full page whose cursor never advances must stop, not loop or undercount."""
+    page = [member(str(i)) for i in range(1000, 2000)]
+
     def handle(request):
         path = request.url.path
-        if path.endswith("/members"):
-            return httpx.Response(200, json={"not": "a list"})
         if path.endswith(f"/channels/{CHANNEL}"):
             return httpx.Response(200, json={"guild_id": GUILD, "type": 0})
         if path.endswith(f"/guilds/{GUILD}"):
@@ -166,11 +263,29 @@ def test_a_malformed_member_page_fails_closed():
             )
         if path.endswith("/users/@me"):
             return httpx.Response(200, json={"id": BOT})
-        return httpx.Response(200, json=member(BOT))
+        if "/members/" in path:
+            return httpx.Response(200, json=member(BOT))
+        return httpx.Response(200, json=page)  # always the same 1000, cursor never moves
 
     with pytest.raises(Problem) as caught:
         run(client(httpx.MockTransport(handle)).audience(CHANNEL, GUILD))
     assert caught.value.status == 503
+
+
+def test_a_malformed_channel_document_produces_no_audience():
+    """Known defect, recorded rather than fixed -- production is out of scope here.
+
+    A 200 whose body is not an object escapes as `AttributeError` from `room.get(...)`
+    instead of the service's `Problem(503)`, so it would surface as a 500. No audience is
+    produced either way, so consent cannot be computed from a bad answer. Accepts both
+    outcomes so that fixing production does not break this test.
+    """
+    for document in ([1, 2, 3], "nope", 7):
+        with pytest.raises((Problem, AttributeError)):
+            run(client(world([member(BOT)], channel_document=document)).audience(CHANNEL, GUILD))
+
+
+# --------------------------------------------------------------------- member() checks
 
 
 def test_transport_failure_fails_closed():
@@ -197,6 +312,14 @@ def test_member_checks_the_asked_about_user_not_the_bot():
     assert run(rest.member(CHANNEL, GUILD, "1")) is True
     with pytest.raises(Problem):
         run(rest.member(CHANNEL, GUILD, "2"))  # unknown member: 404 -> fails closed
+
+
+def test_member_is_false_for_a_member_who_cannot_see_the_channel():
+    """A guild member is not the same as a channel reader; linking must use the latter."""
+    denied = [{"id": "r1", "type": 0, "deny": str(VIEW_CHANNEL), "allow": "0"}]
+    people = [member(BOT), member("2", roles=["r1"])]
+    rest = client(world(people, roles=[{"id": "r1", "permissions": "0"}], overwrites=denied))
+    assert run(rest.member(CHANNEL, GUILD, "2")) is False
 
 
 def test_member_rejects_a_non_numeric_user_without_calling_discord():

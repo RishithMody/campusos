@@ -142,6 +142,18 @@ def grant(env, neg, owner, grantee, window):
     return response.json()["grant_id"]
 
 
+def all_grants(env, neg, window, names=("alice", "bob", "carol")):
+    """Every participant grants every other. `Service.submit` checks disclosure authority
+    for each other participant, so a partial grant set refuses for a reason that has
+    nothing to do with the caller's credential."""
+    return [
+        grant(env, neg, owner, other, window)
+        for owner in names
+        for other in names
+        if owner != other
+    ]
+
+
 def register(env, subject="bot", platform_channel="1234", level="free_busy", guild="123"):
     return env.client.post(
         "/v1/channels",
