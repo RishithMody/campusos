@@ -44,8 +44,13 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install ruff mypy pytest
-          # Project deps, if the owning agent has declared them.
-          for req in backend/requirements.txt ml/requirements.txt requirements-dev.txt; do
+          # Project deps, if the owning agent has declared them. The *-dev files come
+          # first and pull in their own runtime requirements: tests/backend/conftest.py
+          # imports fakeredis, which lives only in backend/requirements-dev.txt, so
+          # installing backend/requirements.txt alone fails collection with
+          # ModuleNotFoundError before a single assertion runs.
+          for req in groupchat/requirements-dev.txt backend/requirements-dev.txt \
+                     backend/requirements.txt ml/requirements-dev.txt ml/requirements.txt; do
             if [ -f "$req" ]; then pip install -r "$req"; fi
           done
           # Only install the project when pyproject actually declares a package;
@@ -71,7 +76,7 @@ jobs:
         if: steps.detect.outputs.found == 'true'
         run: |
           if [ -d tests/backend ]; then
-            pytest tests/backend -v -m 'not gpu'
+            python -m pytest tests/backend -v -m 'not gpu'
           else
             echo "::notice::tests/backend does not exist yet (T2)."
           fi
@@ -80,7 +85,7 @@ jobs:
         if: steps.detect.outputs.found == 'true'
         run: |
           if [ -d tests/ml ]; then
-            pytest tests/ml -v -m 'not gpu'
+            python -m pytest tests/ml -v -m 'not gpu'
           else
             echo "::notice::tests/ml does not exist yet (T4)."
           fi
@@ -89,7 +94,7 @@ jobs:
         if: steps.detect.outputs.found == 'true'
         run: |
           if [ -d tests/infra ]; then
-            pytest tests/infra -v -m 'not gpu'
+            python -m pytest tests/infra -v -m 'not gpu'
           else
             echo "::notice::tests/infra does not exist yet (T3)."
           fi

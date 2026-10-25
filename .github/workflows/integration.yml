@@ -91,11 +91,11 @@ jobs:
         run: |
           ran=0
           if [ -d tests/integration ]; then
-            pytest tests/integration -v -m 'not gpu'
+            python -m pytest tests/integration -v -m 'not gpu'
             ran=1
           fi
           if [ -d tests/e2e ]; then
-            pytest tests/e2e -v -m 'not gpu'
+            python -m pytest tests/e2e -v -m 'not gpu'
             ran=1
           fi
           if [ "$ran" = "0" ]; then echo "::notice::no integration or e2e tests present"; fi
@@ -104,8 +104,8 @@ jobs:
         if: steps.detect.outputs.found == 'true'
         run: |
           # The highest-value tests in this project: they defend the product's core promise.
-          if pytest --collect-only -q -m privacy >/dev/null 2>&1; then
-            pytest -v -m 'privacy and not gpu'
+          if python -m pytest --collect-only -q -m privacy >/dev/null 2>&1; then
+            python -m pytest -v -m 'privacy and not gpu'
           else
             echo "::notice::no tests marked 'privacy' yet — T2 and QA must add them"
           fi

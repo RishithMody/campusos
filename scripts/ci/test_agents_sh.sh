@@ -96,15 +96,20 @@ t "guards left every worktree alone" 0 \
 
 echo "Three-track task IDs are known to the tooling"
 # T9/T10/T11 were added when the project expanded to all three Cubbie tracks. A task the
-# script does not know is refused by create, so an unknown ID would silently block the work.
-t "create: T9 is a known task"    1 $A create frontend T9
-t "create: T10 is a known task"   1 $A create orchestrator T10
-t "create: T11 is a known task"   1 $A create orchestrator T11
-# Exit 1 above is the BLOCKED-dependency guard, not an unknown-task error. Distinguish the
-# two by their messages: an unknown ID says so explicitly.
-t "T9 is not reported unknown"    1 bash -c "$A create frontend T9 2>&1 | grep -q 'unknown task'"
-t "T10 is not reported unknown"   1 bash -c "$A create orchestrator T10 2>&1 | grep -q 'unknown task'"
-t "T11 is not reported unknown"   1 bash -c "$A create orchestrator T11 2>&1 | grep -q 'unknown task'"
+# script does not know is refused outright, so an unknown ID would silently block the work.
+#
+# Asked through `review`, not `create`, and for a reason found by running this suite in CI
+# (2026-10-25): these checks used to assert that `create <role> T9` exits 1, which is only
+# true where `task/T9-groupchat` already exists and the no-overwrite guard refuses it. In a
+# fresh single-branch clone -- which is exactly what `actions/checkout` produces -- the
+# branch is absent, create SUCCEEDED, and the suite both failed and left a worktree behind.
+# A test for "is this ID known?" must not depend on repository history, and must not mutate
+# anything. `review` answers it by message and creates nothing.
+t "T9 is a known task"            0 bash -c "! $A review T9 2>&1 | grep -q 'unknown role or task'"
+t "T10 is a known task"           0 bash -c "! $A review T10 2>&1 | grep -q 'unknown role or task'"
+t "T11 is a known task"           0 bash -c "! $A review T11 2>&1 | grep -q 'unknown role or task'"
+t "a bogus task IS reported unknown" 0 \
+  bash -c "$A review T99 2>&1 | grep -q 'unknown role or task'"
 # A prose table in the task graph that happens to start a cell with a task ID must not
 # be rendered as a task. "| T7 criterion | Needs | Status |" was.
 t "status lists only real tasks"  0 bash -c "! $A status 2>&1 | grep -q 'T7 criterion'"
