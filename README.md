@@ -40,8 +40,8 @@ its owner's ceiling. There is no "share everything" setting to misclick.
 | **Negotiation engine** | LangGraph, bounded rounds, proposals at interval boundaries, `failed` is a normal outcome with human escalation | mock inference |
 | **Disclosure filter** | server-side egress filtering, live grant checks on every cross-student read, audit rows | privacy- and authz-marked tests |
 | **Human approval** | every disclosure and every commitment needs its owner's explicit yes, with a preview and a state version | 409 on a stale decision |
-| **Discord assistant** | two guild-only slash commands, nine frozen sentences, mentions disabled | `FakeDiscord` / `httpx.MockTransport` only — **never a live Discord** |
-| **Channel consent** | per-participant approval, audience identity re-checked on every read, one withdrawal ends it for everyone | mock Discord |
+| **Discord assistant** | two guild-only slash commands, nine frozen sentences, mentions disabled | **a real Discord server, 2026-10-25** — consent path end to end |
+| **Channel consent** | per-participant approval, audience identity re-checked on every read, one withdrawal ends it for everyone | **live** — audience change stopped posting until everyone re-agreed |
 | **Cubbie Skill** (`squad-sync`) | standard-library Python, a week of availability in one pasteable line | the organizers' own validator |
 | **Contracts** | 3 JSON Schemas + OpenAPI 3.1, 30 fixtures including deliberately invalid ones | bundled offline, every fixture asserted |
 
@@ -224,14 +224,21 @@ credential.
 row-level locking, optimistic versioning, SSE under grant revocation, and degradation when
 either service is killed mid-negotiation.
 
-**Verified against mocks only — and this is the one gap that matters:**
+**Verified live against a real Discord server, 2026-10-25.** The full consent path ran
+end to end and posted into a real channel: registration, identity linking, per-participant
+approval, `403` before consent and `200` after, the audience changing and posting stopping
+until everyone re-agreed, convergence, and one withdrawal ending it for everyone. Both
+sentences were read back from Discord and carried no mentions; the audit log held no Discord
+account id. Evidence: [`docs/agents/handoffs/T7b-1.md`](docs/agents/handoffs/T7b-1.md).
 
-> ⚠️ **No CampusOS process has ever contacted Discord.** Every Discord behaviour in this
-> repository is verified against `FakeDiscord` or `httpx.MockTransport`. `can_view` — which
-> decides who can read a room, and therefore what channel consent is consent *to* — was
-> written by the same agent that wrote the fixtures pinning it. If Discord's real permission
-> overwrite semantics differ, the code and its tests are wrong together. That is T7b, and it
-> is blocked on a bot token and a test server.
+> ⚠️ **Still unverified: guild member enumeration.** The Discord application has no
+> privileged Server Members Intent, so `GET /guilds/{id}/members` is refused and production
+> `audience()` cannot run against it — it fails closed, correctly, and the demo supplied the
+> member list instead. `audience()`'s pagination and incomplete-page handling remain
+> mock-tested only. `can_view()` now agrees with Discord for both real members of the test
+> guild, but that guild has two members, no channel overwrites and no administrator, so the
+> branches that worried us are still pinned by fixtures their own author wrote. One toggle in
+> the developer portal clears this.
 
 **Not started:** the browser UI (T5), vLLM on the H200s (T3), optional LoRA fine-tuning (T6).
 
@@ -242,8 +249,12 @@ independent review that produced the current round of fixes is recorded in
 
 ## Known limitations
 
-* **Discord is unverified live.** See above. Nothing else in this list comes close in
-  importance.
+* **Discord audience enumeration is unverified live**, pending one developer-portal
+  toggle. The consent path itself ran against a real server on 2026-10-25.
+* **Linking a CampusOS account to a Discord identity was asserted, not proved**, in that
+  demo: `manage link-discord` needs the student's OAuth access token, which we did not have,
+  so the operator wrote the id directly. No check was weakened, but the ceremony did not
+  happen.
 * **The publish window cannot be closed.** Authorization lives in the backend; the post lives
   in Discord. Between a 200 and Discord accepting the message, consent can be withdrawn, and a
   distributed check plus an external send cannot be made atomic. What bounds it: every post is
@@ -263,7 +274,7 @@ independent review that produced the current round of fixes is recorded in
 |---|---|---|
 | **1 · Cubbie Skills** | `squad-sync` — group scheduling with minimum disclosure | built, validated, public repo live. **Not submitted** |
 | **2 · Agent-to-Agent** | this backend: agents negotiating under per-student disclosure ceilings, with human confirmation | prototype runs; submission package not assembled |
-| **3 · Group Chat Assistant** | the Discord assistant, consent-gated and template-only | runs against mocks; **not live-verified** |
+| **3 · Group Chat Assistant** | the Discord assistant, consent-gated and template-only | **ran live in a real server 2026-10-25**; audience enumeration still pending one intent toggle |
 
 Track 1 gates the other two — the organizers' database refuses a Track 2 or 3 entry from a
 team with no Track 1 entry. All three windows were open with **no close time set** when last
@@ -280,7 +291,8 @@ email) and which member owns the entry. Only the owner can edit an entry afterwa
 <!-- Screenshots: docs/demo/ -- the three-student flow and one consent-gated channel post. -->
 
 > 📹 **Demo video and screenshots: not yet recorded.** Placeholders above; nothing here
-> claims a recording exists.
+> claims a recording exists. The live flow is reproducible for filming:
+> [`scripts/demo/README.md`](scripts/demo/README.md).
 
 ## How this repository was built
 

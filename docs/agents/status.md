@@ -25,7 +25,15 @@ three are fixed, and every command they run was verified locally. **The workflow
 themselves cannot be executed without a push, and pushing is not authorized** — so that
 expectation is reasoning, not evidence.
 
-**The one gap that matters is unchanged: nothing has ever touched Discord.** T7b.
+**Discord is no longer untouched.** On 2026-10-25 the whole consent path ran against the real
+`CampusOS Test` server and posted real frozen sentences into `#general` — including the T12
+gate: audience changed → posting stopped → re-consent → resumed → one withdrawal ended it.
+`docs/agents/handoffs/T7b-1.md`. T7b is `PARTIAL`, not done.
+
+**One toggle is the remaining blocker, and only the owner can flip it:** Discord developer
+portal → CampusOS → Bot → Privileged Gateway Intents → **Server Members Intent** → on.
+Without it `GET /guilds/{id}/members` is refused, production `audience()` cannot run at all
+(it fails closed, correctly), and `scripts/demo/server.py` has to supply the member list.
 
 ## Previous headline (2026-10-24)
 
@@ -109,7 +117,8 @@ T3 and T4 stay parked until Track 1 is in. T2 keeps running.
 |---|---|---|
 | T0b | **D2** — team roster and entry owner | **Human** |
 | T5 | queued by owner priority; its dependencies are satisfied | Orchestrator |
-| T7a | **a Discord bot token + a test server, and the owner's go-ahead to connect** | **Human** |
+| ~~T7a~~ | ~~a Discord bot token + a test server~~ — supplied; T7a is `DONE` | — |
+| T7b | **Server Members Intent** in the Discord developer portal — the last blocker on genuine audience enumeration | **Human** |
 | T7 | T2 ✅, T9 ✅, T3, T5 | T3 and T5 |
 | T11 | T0c, and T7a before Track 3 can be called live-verified | **Human** (D2) |
 | T6 | T3, T4 **and** a human-signed GPU approval token | Human |

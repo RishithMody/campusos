@@ -87,7 +87,7 @@ the Track 2 agent-to-agent message, and the Track 3 group-chat payload. The back
 | T5 | Frontend: negotiation visualisation | 2 | Frontend Engineer | Codex | T1 + stable `contracts/` | `BLOCKED` (queued) |
 | T6 | Optional LoRA fine-tuning | 2 | ML Engineer | Claude Code | T3, T4 | `BLOCKED` |
 | T7a | **Live verification: PostgreSQL + Redis** | 2·3 | QA / Security Reviewer | Codex | T2, T9 | `DONE` |
-| T7b | **Live Discord verification** | 3 | QA / Security Reviewer | Codex | T7a + **bot token** | `BLOCKED` (token) |
+| T7b | **Live Discord verification** | 3 | QA / Security Reviewer | Codex | T7a | `PARTIAL` — consent path verified live 2026-10-25; enumeration still blocked on a privileged intent |
 | T7c | **Connector boundary conformance** (C1–C9) | 3 | QA / Security Reviewer | Claude Code | T7a | `OWNER_AUTHORIZED_REVIEW_WAIVED` |
 | T7d | **Discord readiness fixes** (bot JWT, P1, P2) | 3 | Backend scope, owner-directed | Claude Code | T7a | `OWNER_AUTHORIZED_REVIEW_WAIVED` |
 | TG | ~~Telegram / Groupie connector~~ | — | — | — | — | `DEFERRED` — **NOT CONNECTED** |
@@ -103,12 +103,19 @@ the Track 2 agent-to-agent message, and the Track 3 group-chat payload. The back
 **Discord is the primary and only group-chat integration.** Telegram/Groupie is `DEFERRED`
 and **NOT CONNECTED**; its assessment is preserved as evidence and nothing was deleted.
 
-**Live Discord testing has never happened.** No CampusOS process has ever contacted Discord.
-Every Discord behaviour in this repository is verified against `FakeDiscord` or
-`httpx.MockTransport`. T7b remains `BLOCKED`, and no merge, waiver or passing test in this
-project should be read as live verification. The single highest-risk unknown is unchanged:
-`can_view` and the fixtures that pin it were written by the same agent, so if Discord's real
-overwrite semantics differ, the code and its tests are wrong together.
+**Live Discord testing happened on 2026-10-25, and is partial.** The full consent path ran
+against a real server and posted real frozen sentences into a real channel:
+`docs/agents/handoffs/T7b-1.md`. `can_view()` agrees with Discord for both real members of the
+test guild, so the highest-risk unknown is **partly** resolved — but that guild has two
+members, zero channel overwrites and no administrator, so the branches that actually worried
+us (role aggregation, `@everyone` and member overwrites, the admin short-circuit) are still
+pinned only by fixtures their own author wrote.
+
+**Guild member enumeration is still unverified.** The Discord application has no privileged
+Server Members Intent (`GET /applications/@me` returns `flags=0`), so production `audience()`
+cannot run against it at all — it correctly fails closed. The demo supplied the member list
+instead. `audience()`'s pagination, deduplication and incomplete-page handling remain
+mock-tested only. One toggle in the developer portal clears this.
 
 **T7c and T7d were merged under owner-authorized review waivers, not passes.** T7c had one
 completed review that returned CHANGES_REQUESTED, fixed but never re-reviewed. T7d — which
