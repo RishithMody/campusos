@@ -18,12 +18,15 @@ that path and a shrink-then-regrow path the review missed are closed: consent is
 against a one-way digest of *which* accounts can read the room. `docs/agents/reviews/T12/findings.md`.
 No contract field changed. Full suite green against real PostgreSQL and Redis.
 
-**CI was red on `main` and is expected green again.** Three workflows had been failing since
-2026-10-25 for configuration reasons unrelated to the product: missing validator dependencies,
-a pre-T2 environment variable name, and a formatter disagreeing with `pyproject.toml`. All
-three are fixed, and every command they run was verified locally. **The workflow files
-themselves cannot be executed without a push, and pushing is not authorized** — so that
-expectation is reasoning, not evidence.
+**CI is green on `main` again** — all five workflows, verified on the runner at `a075dc2`.
+Three had been failing since 2026-10-25, none for a product reason: missing validator
+dependencies, a pre-T2 environment variable name, a formatter disagreeing with
+`pyproject.toml`, dev requirements never installed, `pytest` invoked as a console script so
+the repo root was off `sys.path`, and a tooling test that asserted an exit code which only
+held where a task branch already existed — in a fresh single-branch clone it created a
+worktree and failed its own guard. The first round of these fixes was reasoned rather than
+run, and three of the layers were wrong; the lesson is cheap to restate. A clean
+`--depth 1 --single-branch` clone with a CI-shaped venv now reproduces every gate.
 
 **Discord is no longer untouched.** On 2026-10-25 the whole consent path ran against the real
 `CampusOS Test` server and posted real frozen sentences into `#general` — including the T12
