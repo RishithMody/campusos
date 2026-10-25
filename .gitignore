@@ -10,6 +10,8 @@
 id_rsa*
 id_ed25519*
 credentials.json
+token.json
+*.token
 *service-account*.json
 .netrc
 

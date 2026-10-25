@@ -98,9 +98,9 @@ def audit_emissions(skill: Path) -> None:
     if not (scripts / "squad_sync.py").exists():
         return
     sys.path.insert(0, str(scripts))
-    import squad_sync as ss  # noqa: PLC0415
-
     from datetime import date
+
+    import squad_sync as ss  # noqa: PLC0415
     monday = date(2026, 10, 26)
     hostile = [
         "therapy", "Dr Oyelaran", "ana.ruiz@school.edu", "CHEM 340 midterm",

@@ -98,7 +98,7 @@ def load(contracts: Path):
     except ImportError:
         print("FAIL: jsonschema is not installed, so the disclosure matrix was NOT checked.")
         print("      uv pip install --python .venv/bin/python pyyaml jsonschema openapi-spec-validator")
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
     schemas = {}
     for p in sorted(contracts.glob("*.schema.json")):

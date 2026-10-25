@@ -88,14 +88,31 @@ the Track 2 agent-to-agent message, and the Track 3 group-chat payload. The back
 | T6 | Optional LoRA fine-tuning | 2 | ML Engineer | Claude Code | T3, T4 | `BLOCKED` |
 | T7a | **Live verification: PostgreSQL + Redis** | 2·3 | QA / Security Reviewer | Codex | T2, T9 | `DONE` |
 | T7b | **Live Discord verification** | 3 | QA / Security Reviewer | Codex | T7a + **bot token** | `BLOCKED` (token) |
-| T7c | **Connector boundary conformance** (C1–C9) | 3 | QA / Security Reviewer | Claude Code | T7a | `REVIEW` |
-| T7d | **Discord readiness fixes** (bot JWT, P1, P2) | 3 | Backend scope, owner-directed | Claude Code | T7a | `REVIEW` |
+| T7c | **Connector boundary conformance** (C1–C9) | 3 | QA / Security Reviewer | Claude Code | T7a | `OWNER_AUTHORIZED_REVIEW_WAIVED` |
+| T7d | **Discord readiness fixes** (bot JWT, P1, P2) | 3 | Backend scope, owner-directed | Claude Code | T7a | `OWNER_AUTHORIZED_REVIEW_WAIVED` |
 | TG | ~~Telegram / Groupie connector~~ | — | — | — | — | `DEFERRED` — **NOT CONNECTED** |
 | T7 | End-to-end integration (full stack) | 2 | QA / Orchestrator | Codex + Claude Code | T2, T3, T5, T9 | `BLOCKED` |
 | T8 | Final demo & all-track submission check | all | Orchestrator | Claude Code | T0b, T10, T11 | `BLOCKED` |
 | T9 | **Track 3 group chat assistant (Discord)** | 3 | Frontend Engineer | Codex | T1, T2 | `DONE` |
 | T10 | **Track 2 submission package** | 2 | Orchestrator | Claude Code | T0b, T7 | `BLOCKED` |
 | T11 | **Track 3 submission package** | 3 | Orchestrator | Claude Code | T0b, T9 | `BLOCKED` |
+
+## Project status — development closed 2026-10-25
+
+**Discord is the primary and only group-chat integration.** Telegram/Groupie is `DEFERRED`
+and **NOT CONNECTED**; its assessment is preserved as evidence and nothing was deleted.
+
+**Live Discord testing has never happened.** No CampusOS process has ever contacted Discord.
+Every Discord behaviour in this repository is verified against `FakeDiscord` or
+`httpx.MockTransport`. T7b remains `BLOCKED`, and no merge, waiver or passing test in this
+project should be read as live verification. The single highest-risk unknown is unchanged:
+`can_view` and the fixtures that pin it were written by the same agent, so if Discord's real
+overwrite semantics differ, the code and its tests are wrong together.
+
+**T7c and T7d were merged under owner-authorized review waivers, not passes.** T7c had one
+completed review that returned CHANGES_REQUESTED, fixed but never re-reviewed. T7d — which
+changes credential issuance and audience verification — had **no review at all**. Read both
+`WAIVER.md` files before trusting either.
 
 **`REVIEW_WAIVED` satisfies a dependency exactly as `DONE` does.** It means the work is
 merged and the tests pass, but the independent review in CLAUDE.md §6 was **not completed** —
@@ -626,7 +643,7 @@ Both T2 and T9 passed review, and both said plainly what they had not done. This
 |---|---|
 | **Agent** | Backend scope, implemented by the Orchestrator at the owner's direction |
 | **Depends on** | T7a ✅ |
-| **Status** | `REVIEW` — security-sensitive, independent review required before merge |
+| **Status** | `OWNER_AUTHORIZED_REVIEW_WAIVED` — merged 2026-10-25 with **no review at all**, see `docs/agents/reviews/T7d/WAIVER.md` |
 | **Branch / worktree** | `task/T7d-discord-readiness` → `~/campusos-worktrees/T7d-discord-readiness` |
 | **Owns** | `backend/manage.py`, `backend/channels/discord.py`, `tests/backend/test_discord_rest.py` |
 | **GPU approval** | `NONE` |
@@ -776,7 +793,7 @@ empty page under a disabled intent, this is reachable in the demo, not just in t
 |---|---|
 | **Agent** | QA / Security Reviewer scope, implemented by the Orchestrator at the owner's direction |
 | **Depends on** | T7a ✅. **No external credential, no Discord connection, no connector.** |
-| **Status** | `REVIEW` |
+| **Status** | `OWNER_AUTHORIZED_REVIEW_WAIVED` — merged 2026-10-25, **not a PASS** |
 | **Branch / worktree** | `task/T7c-connector-boundary` → `~/campusos-worktrees/T7c-connector-boundary` |
 | **Owns** | `tests/integration/connector/` |
 | **GPU approval** | `NONE`, and none is needed |

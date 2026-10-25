@@ -263,7 +263,7 @@ def build_registry(schemas: list[tuple[Path, dict]]):
         )
         return None
     registry = Registry()
-    for path, schema in schemas:
+    for _path, schema in schemas:
         if "$id" in schema:
             registry = registry.with_resource(schema["$id"], Resource.from_contents(schema))
     return registry

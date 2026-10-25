@@ -225,23 +225,27 @@ def test_a_malformed_member_page_fails_closed(name, page):
     assert caught.value.status == 503, name
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Open defect found in review attempt 2: an EMPTY member list is a well-formed "
-        "list, so the isinstance guard passes and audience() returns size 0. The bot "
-        "itself must be able to view the channel -- context() already insisted -- so "
-        "zero is arithmetically impossible and means the page was not understood. "
-        "Dangerous direction: channel_summary only re-asks for consent when the audience "
-        "GREW, so an undercount lets posting continue through a room that has grown. "
-        "Production is out of scope for this repair; raised for the Orchestrator. "
-        "Strict, so this flips to a failure the moment production is fixed."
-    ),
-)
 def test_an_audience_of_zero_is_never_returned():
-    """The property stated directly, independent of how the page was malformed."""
-    audience = run(client(world([member(BOT)], members_page=[])).audience(CHANNEL, GUILD))
-    assert audience.size > 0
+    """P1, fixed in T7d. Stated as a property, independent of how the page was malformed.
+
+    `context()` has already proved this bot is a member who can view the room, so a count
+    that does not include it is arithmetically impossible and means the enumeration was
+    incomplete. The dangerous direction is *down*: `channel_summary` re-asks for consent
+    only when the audience GREW, so an undercount never closes the gate.
+
+    Until T7d this was a strict xfail recording an open defect. It is now an ordinary
+    assertion. Note the fixed behaviour is to **refuse**, not to return a corrected count
+    -- there is nothing to correct it to.
+    """
+    for page in ({}, "", [], None, [member("1")]):
+        try:
+            size = run(
+                client(world([member(BOT)], members_page=page)).audience(CHANNEL, GUILD)
+            ).size
+        except Problem as refused:
+            assert refused.status == 503, page
+            continue
+        assert size > 0, page
 
 
 def test_a_stalled_pagination_cursor_fails_closed():

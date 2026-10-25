@@ -26,6 +26,12 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 # Tests legitimately use assert, and hardcode obviously-fake credentials in fixtures.
 "tests/**" = ["S101", "S105", "S106"]
+# CI runner scripts shell out to a known interpreter path on purpose, and generate
+# hostile test payloads with the stdlib RNG -- neither is a cryptographic use.
+"scripts/ci/**" = ["S110", "S311", "S603", "S606", "S607"]
+# Review artifacts are evidence produced by the reviewer. Reformatting a reproduction
+# script would change the thing it is evidence of.
+"docs/agents/reviews/**" = ["S101", "S102"]
 
 [tool.mypy]
 python_version = "3.11"
