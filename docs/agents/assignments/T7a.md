@@ -35,6 +35,55 @@ The last row matters as much as the others: `docs/agents/reviews/T9/attempt-1.md
 proves the renderer cannot emit anything but eight fixed sentences. Spend your time on what is
 actually unknown.
 
+## Five of T7's criteria moved here, and three did not
+
+The scheduler is deterministic — `backend/agents/workflow.py:122` picks the candidate slot
+from interval boundaries and hands the model an already-built envelope. Inference gates the
+message; it does not schedule. So a CPU-only demo is the *same* scheduling, and five of T7's
+eight criteria need neither a GPU nor the UI. They are yours:
+
+1. Full stack from one documented command (`docker-compose.yml`)
+2. Three agents negotiate a real conflict to convergence, end to end
+3. Privacy and authorization suite against the **integrated** system, not unit level
+4. Failure modes: inference down, DB down, Redis down, agent timeout
+5. Integration tests in CI using mocks, with no GPU
+
+**Three stay in T7 and are not yours**: the UI escalation path (T5), the live-vLLM run (T3),
+and the full T2–T5 regression. They are not waived or quietly re-scoped — T7 keeps them
+verbatim and stays `BLOCKED`. If you find yourself needing a GPU, stop: you are doing T7's
+work, not yours.
+
+## Start from this, do not redo it
+
+Run by the Orchestrator on 2026-10-24 against real PostgreSQL 17 and real Redis 8.10.2,
+`CAMPUSOS_INFERENCE_MODE=mock`, no GPU:
+
+| | |
+|---|---|
+| Groupchat end-to-end suite | **32 passed** on real PostgreSQL + real Redis |
+| Backend suite | **87 passed, 1 failed** — see the warning below |
+| Convergence persisted | 3 commitments, 6 approvals, 6 grants, 81 audit rows |
+| **No-overlap persisted** | **0 commitments** |
+| Redis contents | only `session:neg_*`, TTL 1s, **no calendar payload** |
+
+**Read this before you touch the conftests.** Both `tests/backend/conftest.py` and
+`tests/groupchat/conftest.py` hardcode `fakeredis` and an in-memory SQLite engine. Swapping
+in real services is **not** a one-line change:
+
+- One Redis client is shared between `TestClient`'s portal loop and the `pytest-asyncio`
+  loop. fakeredis does not care; a real `redis.asyncio` pool binds to the loop it is first
+  used in, and `test_actual_stream_closes_on_grant_revocation` fails with "attached to a
+  different loop". It fails in isolation and passes on fakeredis, and production runs a
+  single uvicorn loop — so **this is the fixture's problem, not the backend's.** Do not
+  "fix" `backend/`.
+- `sqlite://` in-memory is a fresh database per engine. Point every engine at one PostgreSQL
+  database and the second test collides on `students_pkey`. Each engine needs its own
+  database or schema.
+
+Both were found the hard way while producing the numbers above. The throwaway plugins that
+got past them are in the Orchestrator's scratchpad and are **not** a deliverable — write the
+real thing in `tests/live/`.
+
 ## File ownership
 
 **You own:** `tests/live/`, `docker-compose.yml`
@@ -56,7 +105,9 @@ See `docs/task-graph.md` → T7a for the full list. The ones that carry the most
       **posting stops**
 - [ ] Declined and pending remain **indistinguishable** to the bot in the live system
 - [ ] Rate limiting observed and survived — no crash, no double-post
-- [ ] Backend suite green against **real Redis**; record any test that needed changing
+- [ ] Backend suite green against **real Redis** — including the cross-loop stream test,
+      which needs the fixture restructured. Record exactly what changed and why
+- [ ] The end-to-end flow green against **real PostgreSQL**, not just the schema test
 - [ ] PostgreSQL and Redis each killed mid-negotiation: degrade without leaking or corrupting
 - [ ] **The real channel transcript pasted into the handoff**, every line one of the eight
       frozen sentences
