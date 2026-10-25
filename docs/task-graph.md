@@ -88,6 +88,7 @@ the Track 2 agent-to-agent message, and the Track 3 group-chat payload. The back
 | T6 | Optional LoRA fine-tuning | 2 | ML Engineer | Claude Code | T3, T4 | `BLOCKED` |
 | T7a | **Live verification: PostgreSQL + Redis** | 2·3 | QA / Security Reviewer | Codex | T2, T9 | `DONE` |
 | T7b | **Live Discord verification** | 3 | QA / Security Reviewer | Codex | T7a + **bot token** | `BLOCKED` (token) |
+| T7c | **Connector boundary conformance** (C1–C9) | 3 | QA / Security Reviewer | Claude Code | T7a | `REVIEW` |
 | T7 | End-to-end integration (full stack) | 2 | QA / Orchestrator | Codex + Claude Code | T2, T3, T5, T9 | `BLOCKED` |
 | T8 | Final demo & all-track submission check | all | Orchestrator | Claude Code | T0b, T10, T11 | `BLOCKED` |
 | T9 | **Track 3 group chat assistant (Discord)** | 3 | Frontend Engineer | Codex | T1, T2 | `DONE` |
@@ -683,6 +684,54 @@ silent pass. A Discord test that no-ops without a token is worse than none.
 |---|---|---|
 | **Discord bot token + test server** | from the owner | Nothing live runs without one |
 | **Owner's explicit go-ahead** | yes | Connecting to Discord is outward-facing |
+
+---
+
+## T7c — Connector boundary conformance (C1–C9)
+
+| | |
+|---|---|
+| **Agent** | QA / Security Reviewer scope, implemented by the Orchestrator at the owner's direction |
+| **Depends on** | T7a ✅. **No external credential, no Discord connection, no connector.** |
+| **Status** | `REVIEW` |
+| **Branch / worktree** | `task/T7c-connector-boundary` → `~/campusos-worktrees/T7c-connector-boundary` |
+| **Owns** | `tests/integration/connector/` |
+| **GPU approval** | `NONE`, and none is needed |
+
+**Source of truth:** `docs/integration/external-discord-connector.md` §8.1, cases C1–C9. Those
+definitions are the specification; this task does not invent additional requirements.
+
+### Why this exists
+
+The owner is replacing our Discord bot with a third party's connector. C1–C9 test **our side**
+of that boundary, so they are writable before the connector arrives and stay useful whichever
+connector does. Two of them close gaps that predate the integration question: nothing today
+parses the nine-sentence table out of the frozen contract, and `DiscordREST` has never been
+tested at all.
+
+### Ownership deviation, recorded
+
+`tests/` belongs to the QA / Security Reviewer and CLAUDE.md §9 says the Orchestrator does not
+implement. The owner directed this implementation explicitly. The work is therefore on a task
+branch, with a handoff, and goes to **independent review** before any merge — the review loop
+is not waived, only the authorship convention.
+
+### Acceptance criteria
+
+- [ ] C1–C8 implemented verbatim from §8.1 and passing
+- [ ] C9 implemented as far as it can be without the connector, and the remainder marked
+      BLOCKED with evidence rather than weakened
+- [ ] Authorization probed with **valid bodies and real resource IDs**, so a 400 can never be
+      mistaken for a 403
+- [ ] No production code, no frozen contract, no protected file touched
+- [ ] Existing suites still pass unchanged
+- [ ] Mutation-tested: each case fails when the thing it protects is broken
+
+### Blocked on
+
+| | Needed | Why |
+|---|---|---|
+| **C9 connector half** | the friend's connector | Nothing to compare against until it exists |
 
 ---
 
