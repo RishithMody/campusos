@@ -89,6 +89,7 @@ the Track 2 agent-to-agent message, and the Track 3 group-chat payload. The back
 | T7a | **Live verification: PostgreSQL + Redis** | 2·3 | QA / Security Reviewer | Codex | T2, T9 | `DONE` |
 | T7b | **Live Discord verification** | 3 | QA / Security Reviewer | Codex | T7a + **bot token** | `BLOCKED` (token) |
 | T7c | **Connector boundary conformance** (C1–C9) | 3 | QA / Security Reviewer | Claude Code | T7a | `REVIEW` |
+| T7d | **Discord readiness fixes** (bot JWT, P1, P2) | 3 | Backend scope, owner-directed | Claude Code | T7a | `REVIEW` |
 | T7 | End-to-end integration (full stack) | 2 | QA / Orchestrator | Codex + Claude Code | T2, T3, T5, T9 | `BLOCKED` |
 | T8 | Final demo & all-track submission check | all | Orchestrator | Claude Code | T0b, T10, T11 | `BLOCKED` |
 | T9 | **Track 3 group chat assistant (Discord)** | 3 | Frontend Engineer | Codex | T1, T2 | `DONE` |
@@ -615,6 +616,45 @@ Both T2 and T9 passed review, and both said plainly what they had not done. This
 |---|---|---|
 | **Discord bot token + a test server** | from the owner | Nothing live can run without one. Never commit it |
 | **Owner approval to connect** | explicit | Connecting to Discord is an outward-facing action |
+
+---
+
+## T7d — Discord readiness fixes
+
+| | |
+|---|---|
+| **Agent** | Backend scope, implemented by the Orchestrator at the owner's direction |
+| **Depends on** | T7a ✅ |
+| **Status** | `REVIEW` — security-sensitive, independent review required before merge |
+| **Branch / worktree** | `task/T7d-discord-readiness` → `~/campusos-worktrees/T7d-discord-readiness` |
+| **Owns** | `backend/manage.py`, `backend/channels/discord.py`, `tests/backend/test_discord_rest.py` |
+| **GPU approval** | `NONE` |
+
+The three code blockers between us and live Discord verification, fixed together because
+none of them is useful alone.
+
+- **B1** — nothing issued a `kind=bot` JWT. `manage.py` had `provision` and `link-discord`
+  only, so the credential every bot call needs could not be created at all.
+- **P1** — `audience()` returned size 0 for an empty member page. Re-consent only fires when
+  the audience *grew*, so an undercount is silent. Found by T7c.
+- **P2** — a 200 whose body is not an object escaped as `AttributeError` instead of the
+  service's `Problem(503)`, surfacing as a 500 rather than failing closed. Found by T7c.
+
+### Merge ordering with T7c
+
+T7c pins P1 as a **strict xfail**. When both branches are merged, that test will XPASS and
+therefore fail — deliberately, as the signal to convert it to a plain assertion. Merge T7c
+first, then T7d, then flip
+`tests/integration/connector/test_discord_failclosed.py::test_an_audience_of_zero_is_never_returned`.
+
+### Acceptance criteria
+
+- [ ] `manage.py issue-bot` mints a guild-bound `kind=bot` token, prints it once, persists nothing
+- [ ] It refuses to mint a token whose subject is a provisioned student
+- [ ] `audience()` can never return a count that excludes the bot itself
+- [ ] A non-object document from Discord fails closed as `Problem(503)`, never `AttributeError`
+- [ ] No frozen contract changed; no authentication, consent or audience check weakened
+- [ ] Mutation-tested: each new guard has a test that fails when it is removed
 
 ---
 
