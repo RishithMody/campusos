@@ -75,22 +75,36 @@ class DiscordREST:
         except (httpx.HTTPError, ValueError):
             raise Problem(503, "Channel verification unavailable") from None
 
+    async def document(self, path: str) -> dict[str, Any]:
+        """A 200 is not enough: the body has to be the object we asked for.
+
+        Without this, a non-object body reaches `.get(...)` and escapes as AttributeError
+        instead of the service's fail-closed 503, surfacing to the caller as a 500.
+        """
+        value = await self.fetch(path)
+        if not isinstance(value, dict):
+            raise Problem(503, "Channel verification unavailable")
+        return value
+
     async def context(self, channel: str, guild: str):
         if not channel.isdigit() or not guild.isdigit():
             raise Problem(403)
-        room = await self.fetch(f"channels/{channel}")
+        room = await self.document(f"channels/{channel}")
         if room.get("guild_id") != guild or room.get("type") != 0:
             raise Problem(403)
-        server = await self.fetch(f"guilds/{guild}")
-        bot = await self.fetch("users/@me")
-        membership = await self.fetch(f"guilds/{guild}/members/{bot['id']}")
+        server = await self.document(f"guilds/{guild}")
+        bot = await self.document("users/@me")
+        identity = bot.get("id")
+        if not isinstance(identity, str) or not identity.isdigit():
+            raise Problem(503, "Channel verification unavailable")
+        membership = await self.document(f"guilds/{guild}/members/{identity}")
         if not can_view(membership, server, room):
             raise Problem(403)
-        return server, room
+        return server, room, identity
 
     async def audience(self, channel: str, guild: str) -> Audience:
         try:
-            server, room = await self.context(channel, guild)
+            server, room, identity = await self.context(channel, guild)
             after, visible = "0", set()
             for _page in range(100):
                 members = await self.fetch(f"guilds/{guild}/members?limit=1000&after={after}")
@@ -100,6 +114,12 @@ class DiscordREST:
                     if can_view(member, server, room):
                         visible.add(member["user"]["id"])
                 if len(members) < 1000:
+                    # context() already proved this bot is a member who can view the room,
+                    # so a result without it means the enumeration was incomplete. Consent
+                    # is given against this number, and an undercount is the dangerous
+                    # direction: re-consent only fires when the audience GREW.
+                    if identity not in visible:
+                        raise Problem(503, "Channel verification unavailable")
                     return Audience(guild, len(visible))
                 following = str(max(int(m["user"]["id"]) for m in members))
                 if int(following) <= int(after):
@@ -113,8 +133,8 @@ class DiscordREST:
         if not user.isdigit():
             return False
         try:
-            server, room = await self.context(channel, guild)
-            membership = await self.fetch(f"guilds/{guild}/members/{user}")
+            server, room, _ = await self.context(channel, guild)
+            membership = await self.document(f"guilds/{guild}/members/{user}")
             return can_view(membership, server, room)
         except (KeyError, TypeError, ValueError):
             raise Problem(503, "Channel verification unavailable") from None
