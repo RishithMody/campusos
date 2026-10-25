@@ -90,6 +90,7 @@ the Track 2 agent-to-agent message, and the Track 3 group-chat payload. The back
 | T7b | **Live Discord verification** | 3 | QA / Security Reviewer | Codex | T7a + **bot token** | `BLOCKED` (token) |
 | T7c | **Connector boundary conformance** (C1–C9) | 3 | QA / Security Reviewer | Claude Code | T7a | `REVIEW` |
 | T7d | **Discord readiness fixes** (bot JWT, P1, P2) | 3 | Backend scope, owner-directed | Claude Code | T7a | `REVIEW` |
+| TG | ~~Telegram / Groupie connector~~ | — | — | — | — | `DEFERRED` — **NOT CONNECTED** |
 | T7 | End-to-end integration (full stack) | 2 | QA / Orchestrator | Codex + Claude Code | T2, T3, T5, T9 | `BLOCKED` |
 | T8 | Final demo & all-track submission check | all | Orchestrator | Claude Code | T0b, T10, T11 | `BLOCKED` |
 | T9 | **Track 3 group chat assistant (Discord)** | 3 | Frontend Engineer | Codex | T1, T2 | `DONE` |
@@ -655,6 +656,30 @@ first, then T7d, then flip
 - [ ] A non-object document from Discord fails closed as `Problem(503)`, never `AttributeError`
 - [ ] No frozen contract changed; no authentication, consent or audience check weakened
 - [ ] Mutation-tested: each new guard has a test that fails when it is removed
+
+---
+
+## TG — Telegram / Groupie connector — DEFERRED
+
+| | |
+|---|---|
+| **Status** | `DEFERRED` / **NOT CONNECTED**. Owner decision, 2026-10-24. |
+| **Assessment** | `docs/integration/telegram-groupie-connector.md` — preserved as evidence, do not delete |
+| **Active work** | **None.** No implementation, no research, no connector task. |
+
+Discord is the primary and only active group-chat integration for the hackathon.
+
+The assessment found zero Telegram references anywhere in this repository's history, and
+`platform` in the frozen contract is `enum: [discord]`, so a Telegram chat is rejected at the
+schema. **No frozen contract is to be modified to accommodate Telegram.**
+
+The reason it is deferred rather than queued: Telegram public rooms have an unbounded,
+unknowable audience, and that number is exactly what channel consent is computed against.
+That is a product decision about reshaping a privacy guarantee, not a porting task. Anyone
+picking this up later starts from §4.2 B4 of the assessment, not from the code.
+
+Nothing existing is deleted. `@CubbieGroupieBot` is not connected to CampusOS, and whatever
+it does is its own backend's doing, under its own rules.
 
 ---
 
