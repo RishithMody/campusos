@@ -247,7 +247,7 @@ cmd_status() {
 
   hdr "Task graph"
   if [ -f "$GRAPH" ]; then
-    awk -F'|' 'NF>3 && $2 ~ /^ *T[0-9]/ {
+    awk -F'|' 'NF>3 && $2 ~ /^ *T[0-9]+[a-z]? *$/ {
       gsub(/^ +| +$/,"",$2); gsub(/^ +| +$/,"",$3); gsub(/^ +| +$/,"",$4);
       st=$(NF-1); gsub(/[ `]/,"",st);
       printf "  %-5s %-10s %-22s %s\n", $2, st, $4, $3
