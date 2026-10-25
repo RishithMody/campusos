@@ -2,7 +2,20 @@
 
 **Task:** T0. **Status:** verified against official sources on the dates shown.
 **Rule for this file:** every claim carries a source and a date checked. Anything not published
-is recorded under [`## Unverified`](#unverified), never guessed. If you add to this file, keep
+is recorded under [`## Published and submitted
+
+| | |
+|---|---|
+| **Track 1 Skill repo** | <https://github.com/RishithMody/campusos-squad-sync> — **public since 2026-10-24** |
+| **Install link** | `https://github.com/RishithMody/campusos-squad-sync/tree/main/squad-sync` |
+| **Track 1 entry** | **not submitted** — needs D2 (roster + entry owner) and the owner's yes |
+| **Track 2 entry** | not submitted |
+| **Track 3 entry** | not submitted |
+
+Cubbie installs the **newest commit**, so pushing to that repo updates the Skill for everyone
+who has it. No resubmission, and no lost votes.
+
+## Unverified`](#unverified), never guessed. If you add to this file, keep
 that property — a fabricated requirement here propagates into every other task.
 
 Last checked: **2026-10-24**.

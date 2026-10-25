@@ -78,8 +78,8 @@ the Track 2 agent-to-agent message, and the Track 3 group-chat payload. The back
 | ID | Task | Track | Agent | CLI | Depends on | Status |
 |---|---|---|---|---|---|---|
 | T0 | Verify hackathon requirements | all | Orchestrator | Claude Code | — | `DONE` |
-| T0b | **Track 1 Cubbie Skill** (build) | 1 | Orchestrator | Claude Code | T0 | `REVIEW` |
-| T0c | **Track 1 submission** (publish + submit) | 1 | Orchestrator | Claude Code | T0b + **D2** | `BLOCKED` (D2) |
+| T0b | **Track 1 Cubbie Skill** (build + publish) | 1 | Orchestrator | Claude Code | T0 | `DONE` |
+| T0c | **Track 1 submission** (submit the entry) | 1 | Orchestrator | Claude Code | T0b + **D2** | `BLOCKED` (D2) |
 | T1 | Architecture & shared contracts | all | Orchestrator | Claude Code | — | `REVIEW_WAIVED` |
 | T2 | Backend implementation | 1·2·3 | Backend Engineer | Codex | T1 | `DONE` |
 | T3 | GPU inference setup (vLLM) | 2·3 | GPU Infra Engineer | Codex | T1 | `READY` |
