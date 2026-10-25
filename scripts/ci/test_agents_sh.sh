@@ -105,6 +105,7 @@ t "create: T11 is a known task"   1 $A create orchestrator T11
 t "T9 is not reported unknown"    1 bash -c "$A create frontend T9 2>&1 | grep -q 'unknown task'"
 t "T10 is not reported unknown"   1 bash -c "$A create orchestrator T10 2>&1 | grep -q 'unknown task'"
 t "T11 is not reported unknown"   1 bash -c "$A create orchestrator T11 2>&1 | grep -q 'unknown task'"
+t "T7b is a known task"           0 bash -c "! $A review T7b 2>&1 | grep -q 'unknown role or task'"
 t "T7a is a known task"           0 bash -c "! $A review T7a 2>&1 | grep -q 'unknown role or task'"
 t "T0c is a known task"           0 bash -c "$A create orchestrator T0c 2>&1 | grep -qv 'unknown task'"
 t "T0c refused while BLOCKED"     1 bash -c "$A create orchestrator T0c"

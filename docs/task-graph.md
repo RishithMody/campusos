@@ -86,7 +86,8 @@ the Track 2 agent-to-agent message, and the Track 3 group-chat payload. The back
 | T4 | ML evaluation baseline | 2 | ML Engineer | Claude Code | T1 | `READY` |
 | T5 | Frontend: negotiation visualisation | 2 | Frontend Engineer | Codex | T1 + stable `contracts/` | `BLOCKED` (queued) |
 | T6 | Optional LoRA fine-tuning | 2 | ML Engineer | Claude Code | T3, T4 | `BLOCKED` |
-| T7a | **Live verification: PostgreSQL + Redis** | 2·3 | QA / Security Reviewer | Codex | T2, T9 | `REVIEW` |
+| T7a | **Live verification: PostgreSQL + Redis** | 2·3 | QA / Security Reviewer | Codex | T2, T9 | `DONE` |
+| T7b | **Live Discord verification** | 3 | QA / Security Reviewer | Codex | T7a + **bot token** | `BLOCKED` (token) |
 | T7 | End-to-end integration (full stack) | 2 | QA / Orchestrator | Codex + Claude Code | T2, T3, T5, T9 | `BLOCKED` |
 | T8 | Final demo & all-track submission check | all | Orchestrator | Claude Code | T0b, T10, T11 | `BLOCKED` |
 | T9 | **Track 3 group chat assistant (Discord)** | 3 | Frontend Engineer | Codex | T1, T2 | `DONE` |
@@ -613,6 +614,75 @@ Both T2 and T9 passed review, and both said plainly what they had not done. This
 |---|---|---|
 | **Discord bot token + a test server** | from the owner | Nothing live can run without one. Never commit it |
 | **Owner approval to connect** | explicit | Connecting to Discord is an outward-facing action |
+
+---
+
+## T7b — Live Discord verification
+
+| | |
+|---|---|
+| **Agent** | QA / Security Reviewer (Codex) |
+| **Depends on** | T7a ✅ **and** a Discord bot token + test server from the owner |
+| **Status** | `BLOCKED` — on the token and the owner's go-ahead to connect |
+| **Branch / worktree** | `task/T7b-live-discord` → `~/campusos-worktrees/T7b-live-discord` |
+| **Owns** | `tests/live/discord/`, `groupchat/README.md` (the live checklist only) |
+| **GPU approval** | `NONE`, and none is needed |
+
+**The last entirely unverified surface in the project.** Everything else has now run against
+something real: PostgreSQL and Redis in T7a, the renderer against 792 hostile payloads in T9,
+the contracts against their fixtures. Discord has only ever been a `FakeDiscord` class.
+
+### What has never happened
+
+No account. No server. No channel. No gateway connection. No slash command registered against
+live Discord. The Guild Members intent has never been enabled, the permission calculation has
+only ever been checked against mocked responses, and no rate limit has ever been hit.
+
+T9's `backend/channels/discord.py` computes view permission from guild member lists and
+channel overwrites. `test_discord_overwrite_order` pins the ordering logic against fixtures —
+**fixtures written by the same agent that wrote the code.** If Discord's real overwrite
+semantics differ, both are wrong together and nothing catches it. That is the single
+highest-risk unknown left.
+
+### Acceptance criteria
+
+- [ ] The bot joins a real server and `/schedule` registers the actual invoking channel
+- [ ] Guild Members intent confirmed **enabled in the Developer Portal**, and the failure mode
+      when it is *not* enabled is recorded — that is the first thing a judge reproducing this
+      will hit
+- [ ] **Real permission calculation checked against Discord's own answer**, not the fixture:
+      a member who can see the channel and one who cannot, verified both ways
+- [ ] Full consent cycle in a real channel: bind → all approve → summary posted → one
+      withdraws → **posting stops**
+- [ ] Declined and pending remain indistinguishable to the bot live, as in the tests
+- [ ] A rate limit actually encountered and survived: no crash, no double-post
+- [ ] **The real channel transcript pasted into the handoff.** Every line must be one of the
+      eight frozen sentences in `docs/agents/reviews/T9/attempt-1.md`
+- [ ] Discord token from the environment only; **never committed**. The hook will catch it,
+      but do not rely on that
+- [ ] `tests/live/discord/` skips visibly without a token, as `tests/live/` already does
+
+### Required tests
+
+Extend the `tests/live/` pattern: opt-in by environment, visible skip with a reason, never a
+silent pass. A Discord test that no-ops without a token is worse than none.
+
+### Context the agent cannot infer
+
+- The checklist already exists in `groupchat/README.md`. Start there.
+- **The bot does not poll `channel-bindings`** — T2's GET refuses bot credentials, so the bot
+  relies on the `channel-summary` 403 gate. Documented deviation, not a bug. Confirm live
+  behaviour matches.
+- **Same-size audience substitution is a known contract gap.** Do not fix it here.
+- `FakeDiscord` lives in `tests/live/environment.py` and in both suite conftests. Replacing it
+  for the live suite is your job; **leave the mock path working**, because CI has no token.
+
+### Blocked on
+
+| | Needed | Why |
+|---|---|---|
+| **Discord bot token + test server** | from the owner | Nothing live runs without one |
+| **Owner's explicit go-ahead** | yes | Connecting to Discord is outward-facing |
 
 ---
 

@@ -40,7 +40,8 @@ kept **validated and submittable on short notice**.
 | — | Orchestrator | T0b | claude | `~/campusos-worktrees/T0b-cubbie-skill` | **`REVIEW`** — Skill + public package ready for owner acceptance |
 | — | Orchestrator | T0c | claude | — | **blocked on D2** — publish + submit |
 | — | Orchestrator | T1 | claude | `~/campusos-worktrees/T1-architecture` | **`REVIEW_WAIVED`** — merged to `main`. Not a `PASS` |
-| 1 | QA / Security Reviewer | T7a | codex | `~/campusos-worktrees/T7a-live-verify` | **`READY`** — needs a Discord token + owner go-ahead |
+| — | QA / Security Reviewer | T7a | codex | — | **`DONE`** — merged 2026-10-24. PostgreSQL + Redis real |
+| 1 | QA / Security Reviewer | T7b | codex | — | **`BLOCKED`** — needs a Discord bot token + owner go-ahead |
 | 2 | GPU Infra Engineer | T3 | codex | `~/campusos-worktrees/T3-gpu` | `READY` — **deprioritised below Track 1**, not started |
 | 3 | ML Engineer | T4 | claude | `~/campusos-worktrees/T4-ml-baseline` | `READY` — **deprioritised below Track 1**, not started |
 | — | Frontend Engineer | T5 → T9 | codex | — | waiting on stable `contracts/` |
@@ -62,9 +63,10 @@ reports are the best account of what is sharp about these contracts. Short and s
 
 **Human, two things:**
 
-1. **Supply a Discord bot token and a test server for T7a**, and say whether we may connect.
-   Nothing in this project has ever contacted real Discord. The PostgreSQL and Redis half of
-   T7a is local and can start immediately without either.
+1. **Supply a Discord bot token and a test server, and say whether we may connect.** This is
+   now the only thing blocking the last unverified surface in the project. T7a merged with
+   PostgreSQL and Redis verified against real services; **Discord has only ever been a
+   `FakeDiscord` class.** T7b is written and waiting.
 
 2. **Accept T0b, then unblock T0c.** The Skill is built, validated and packaged; the only
    acceptance criterion left is one nobody can meet locally — installing it on a real Cubbie
@@ -145,6 +147,29 @@ versions reviewed:
   submitted by the student rather than the bot.
 - **The disclosure ladder has a committed sweep**, `scripts/ci/check_disclosure_matrix.py`,
   which also fails when a schema grows a carrier it does not know about.
+
+## How to tell a live run from a mock run
+
+Both suites run in either mode and the numbers are close enough to confuse:
+
+| Mode | Result |
+|---|---|
+| Mock (no `CAMPUSOS_LIVE`) | **119 passed, 8 skipped** |
+| Live (real PostgreSQL + Redis) | **127 passed, 0 skipped** |
+
+**A mock run cannot reach 127.** The skip count is the tell. With the services *down* the run
+is 1 failed and 39 errors — but 48 tests still pass, because they never touch a service. So
+"some passes" is not "live verified"; look for 127 with no skips.
+
+```bash
+CAMPUSOS_LIVE=1 CAMPUSOS_LIVE_DESTRUCTIVE=1 CAMPUSOS_LIVE_NATIVE=1 \
+  CAMPUSOS_TEST_POSTGRES_URL=postgresql+psycopg://…@127.0.0.1:55439/postgres \
+  CAMPUSOS_TEST_REDIS_URL=redis://127.0.0.1:56389/0 \
+  python -m pytest -p tests.live.plugin tests/backend/ tests/groupchat/ tests/live/ -q
+```
+
+**Docker startup is unverified.** The Compose config validates, the daemon was unavailable,
+and no container has ever been started. Native services are not container evidence.
 
 ## Contract stability
 
