@@ -678,6 +678,24 @@ silent pass. A Discord test that no-ops without a token is worse than none.
 - `FakeDiscord` lives in `tests/live/environment.py` and in both suite conftests. Replacing it
   for the live suite is your job; **leave the mock path working**, because CI has no token.
 
+### Two open defects T7c found in the audience path (2026-10-24)
+
+Both in `backend/channels/discord.py`, both left unfixed because T7c was a tests-only
+repair. Evidence and reproduction: `docs/agents/handoffs/T7c-2.md` §4.
+
+- **P1 — an empty member list yields an audience of zero.** `[]` passes the list guard, so
+  `audience()` returns `size 0`. The bot itself must be able to view the channel, so zero is
+  arithmetically impossible. `channel_summary` only re-asks for consent when the audience
+  **grew**, so an undercount can never trip re-consent — the dangerous direction. A plausible
+  live trigger is **Guild Members intent being disabled**, which is already a T7b criterion.
+  Pinned as a strict xfail in `tests/integration/connector/`, so it flips to a failure when
+  fixed.
+- **P2 — a malformed channel document escapes as `AttributeError`,** not `Problem(503)`, so it
+  would surface as a 500 rather than failing closed through the service's own path.
+
+Check P1 against real Discord during T7b before deciding the fix: if the live API returns an
+empty page under a disabled intent, this is reachable in the demo, not just in theory.
+
 ### Blocked on
 
 | | Needed | Why |
