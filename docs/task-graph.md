@@ -499,6 +499,62 @@ integration waits on T3 (vLLM) and T5 (the UI); **live verification of Discord, 
 Redis waits on nothing** — T2 and T9 are merged. Parking the live checks behind a GPU task
 would have left the riskiest unknowns untouched for longest.
 
+### GPU inference is not on the critical path for a working demo
+
+Asked directly: which of T7's requirements genuinely need vLLM, and which only need
+deterministic scheduling? The answer is in `backend/agents/workflow.py:122`:
+
+```python
+"payload": {"proposed_slot": state["candidates"][state["index"]]},
+```
+
+**The slot is chosen deterministically**, from interval boundaries computed by the backend.
+The model is handed an already-built, already-privacy-filtered envelope and asked to return
+it; if it fails, the negotiation escalates. Inference is a **gate on the message**, not the
+scheduler. So a CPU-only demo is not a degraded demo of scheduling — it is the *same*
+scheduling. What a GPU actually buys is natural-language quality on the chat surface, and
+T4's benchmark numbers.
+
+Mapping T7's eight acceptance criteria against that:
+
+| T7 criterion | Needs | Status |
+|---|---|---|
+| Full stack from one documented command | — | **T7a** |
+| Three agents negotiate a real conflict to convergence, end to end | — | **done, on real services** ✅ |
+| Non-convergence escalates to human approval **in the UI** | **T5** | stays in T7 |
+| Works in mock mode with no GPU | — | **done** ✅ |
+| …**and against live vLLM** | **T3** | stays in T7 |
+| Privacy and authorization suite against the integrated system | — | **T7a** |
+| Full regression across T2–T5 | **T3, T4, T5** | stays in T7 |
+| Failure modes: inference down, DB down, Redis down, agent timeout | — | **T7a** |
+| Integration tests in CI using mocks, no GPU | — | **T7a** |
+
+Five of eight need neither a GPU nor a UI. **T7a takes those five; the three that genuinely
+depend on T3 and T5 stay in T7 and are not being waived, skipped or quietly re-scoped.** T7
+remains `BLOCKED` and keeps those criteria verbatim.
+
+### Already demonstrated on real services, 2026-10-24
+
+Run by the Orchestrator against a real PostgreSQL 17 cluster and a real Redis 8.10.2, with
+`CAMPUSOS_INFERENCE_MODE=mock` and no GPU. **T7a should not redo these — build on them.**
+
+| | |
+|---|---|
+| Groupchat end-to-end suite | **32 passed** on real PostgreSQL + real Redis |
+| Backend suite | **87 passed, 1 failed** (see below) on the same |
+| Convergence case persisted | 3 commitments, 6 approvals, 6 grants, 81 audit rows |
+| **No-overlap case persisted** | **0 commitments** — nothing is committed without convergence |
+| Redis contents | only `session:neg_*` keys, TTL 1s, **no calendar payload** |
+
+**The one failure is a test-harness limit, not a product defect.**
+`test_actual_stream_closes_on_grant_revocation` fails against real Redis with "attached to a
+different loop": both conftests hardcode `fakeredis` and share one client between
+`TestClient`'s portal loop and the `pytest-asyncio` loop. fakeredis does not care; a real
+`redis.asyncio` pool binds to the loop it is first used in. It fails in isolation and passes
+on fakeredis, and production runs a single uvicorn loop. **T7a must restructure that fixture
+rather than "fix" the backend** — swapping fakeredis for real Redis in the existing conftest
+is not a one-line change, and that is the first thing to find out.
+
 ### What is actually unverified right now
 
 Both T2 and T9 passed review, and both said plainly what they had not done. This is that list:
