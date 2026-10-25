@@ -29,11 +29,21 @@ from backend.config import Settings
 
 
 class RosterDiscord(DiscordREST):
-    """`DiscordREST` with the member list supplied rather than enumerated."""
+    """`DiscordREST` with the member list supplied rather than enumerated.
 
-    def __init__(self, token: str, roster: list[str]):
+    The list is re-read from disk on every call, so a live demo can change who is in the
+    room without restarting the server -- which is the whole point of the audience gate
+    and the one thing worth showing an audience.
+    """
+
+    def __init__(self, token: str, roster_file: Path):
         super().__init__(token)
-        self.roster = roster
+        self.roster_file = roster_file
+
+    @property
+    def roster(self) -> list[str]:
+        raw = self.roster_file.read_text()
+        return [u.strip() for u in raw.replace("\n", ",").split(",") if u.strip()]
 
     async def audience(self, channel: str, guild: str) -> Audience:
         try:
@@ -52,9 +62,21 @@ class RosterDiscord(DiscordREST):
             raise Problem(503, "Channel verification unavailable") from None
 
 
+ROSTER_FILE = Path(__file__).resolve().parent / "roster.txt"
+
+
 def build():
-    roster = [u for u in os.environ["CAMPUSOS_DEMO_ROSTER"].split(",") if u]
-    if not roster:
-        raise SystemExit("CAMPUSOS_DEMO_ROSTER must list the Discord user ids in the room")
+    roster_file = Path(os.environ.get("CAMPUSOS_DEMO_ROSTER_FILE", ROSTER_FILE))
+    if not roster_file.exists():
+        roster = os.environ.get("CAMPUSOS_DEMO_ROSTER", "")
+        if not roster.strip():
+            raise SystemExit(
+                f"Write the Discord user ids in the room to {roster_file}, "
+                "or set CAMPUSOS_DEMO_ROSTER"
+            )
+        roster_file.write_text(roster.replace(",", "\n") + "\n")
     config = Settings.from_env()
-    return create_app(config, discord=RosterDiscord(config.discord_token, roster))
+    client = RosterDiscord(config.discord_token, roster_file)
+    if not client.roster:
+        raise SystemExit(f"{roster_file} lists no Discord user ids")
+    return create_app(config, discord=client)

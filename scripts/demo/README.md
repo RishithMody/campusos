@@ -6,6 +6,9 @@ Drives the whole consent flow against a **real Discord server** and posts the fr
 
 First run: **2026-10-25**. Evidence: [`docs/agents/handoffs/T7b-1.md`](../../docs/agents/handoffs/T7b-1.md).
 
+**Presenting?** Use [`PRESENTATION.md`](PRESENTATION.md) — the rehearsed six-beat runbook,
+with one short command per beat and a what-to-do-if-it-breaks table.
+
 ## ⚠️ One substitution, until a toggle is flipped
 
 `server.py` supplies the channel's member list from `CAMPUSOS_DEMO_ROSTER` instead of
@@ -95,3 +98,13 @@ pkill -f groupchat.bot; pkill -f "scripts.demo.server"; docker compose down
 ```
 
 Demo accounts and the demo database are disposable. The bot JWT is not stored.
+
+## The stage-manager
+
+`act.py` is one short command per demo beat: `check`, `stage`, `changed`, `restored`,
+`reconsent`, `converge`, `withdraw`, `say`, `watch`. `check` and `say` change nothing;
+everything else is a beat you trigger. `roster.txt` holds the Discord accounts that can
+read the channel and is re-read on every audience check, so the room can change mid-demo
+without restarting anything. `roster.default.txt` is what `restored` puts back.
+
+Run `act.py --help` for the list.
