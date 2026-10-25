@@ -36,7 +36,7 @@ jobs:
       - name: Shell syntax check
         run: |
           fail=0
-          for f in scripts/agents.sh scripts/ci/*.sh .githooks/*; do
+          for f in scripts/agents.sh scripts/ci/*.sh scripts/demo/*.sh .githooks/*; do
             [ -f "$f" ] || continue
             if bash -n "$f"; then echo "ok   $f"; else echo "FAIL $f"; fail=1; fi
           done
@@ -45,7 +45,7 @@ jobs:
       - name: Shellcheck
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
-          shellcheck -S warning scripts/agents.sh scripts/ci/*.sh .githooks/*
+          shellcheck -S warning scripts/agents.sh scripts/ci/*.sh scripts/demo/*.sh .githooks/*
 
       - name: Orchestration files present
         run: |

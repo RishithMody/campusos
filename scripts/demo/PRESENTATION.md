@@ -16,30 +16,34 @@ A="backend/.venv/bin/python scripts/demo/act.py"
 ## Cold start (do this 15 minutes before, not on stage)
 
 ```sh
-# 1. PostgreSQL and Redis
-docker compose up -d                       # or your local services on .env's ports
-(cd backend && ../backend/.venv/bin/alembic upgrade head)
+# 1. PostgreSQL and Redis on the ports .env asks for, plus migrations.
+#    Uses Docker when the daemon is up and local binaries when it is not, so this
+#    works on a laptop that has just booted. Data lives in ~/.campusos-demo --
+#    deliberately not a temp directory, so a rehearsal's database survives to the talk.
+./scripts/demo/services.sh up
 
-# 2. Three demo students, once per database
-for s in alice-demo bob-demo carol-demo; do
-  backend/.venv/bin/python -m backend.manage provision "$s"
-done
-# One student needs a verified Discord identity to link the channel:
-CAMPUSOS_DISCORD_OAUTH_ACCESS_TOKEN=... \
-  backend/.venv/bin/python -m backend.manage link-discord alice-demo
+# 2. A FRESH bot credential, BEFORE starting the bot. The one in .env expires, and an
+#    expired credential is refused with the same uniform 403 as "nobody consented" --
+#    correct, and indistinguishable on stage.
+export CAMPUSOS_BOT_TOKEN=$(backend/.venv/bin/python -m backend.manage \
+    issue-bot campusos-bot --guild "$DISCORD_GUILD_ID" --ttl 24 | head -1)
 
 # 3. The backend
-PYTHONPATH=. nohup backend/.venv/bin/python -m uvicorn scripts.demo.server:build \
+nohup backend/.venv/bin/python -m uvicorn scripts.demo.server:build \
     --factory --host 127.0.0.1 --port 8000 > /tmp/campusos-api.log 2>&1 &
 
-# 4. A FRESH bot credential -- the one in .env expires, and an expired one
-#    fails with the same uniform 403 as "no consent", which is confusing on stage.
-export CAMPUSOS_BOT_TOKEN=$(backend/.venv/bin/python -m backend.manage \
-    issue-bot campusos-bot --guild "$DISCORD_GUILD_ID" --ttl 12 | head -1)
-
-# 5. The Discord bot
+# 4. The Discord bot. Startup re-syncs /schedule and /watch to the guild.
 nohup groupchat/.venv/bin/python -m groupchat.bot > /tmp/campusos-bot.log 2>&1 &
+
+# 5. The three demo students, once per database
+$A seed
 ```
+
+**Do not restart the backend after this.** The bot does not retry: a slash command that
+lands while the API is unreachable gets the generic "CampusOS is unavailable" ephemeral
+reply. That is correct behaviour -- nothing is said in the room and nothing is confirmed
+-- but from the stage it reads as a failure. One rehearsal restart cost a 58-second
+window and a `/schedule` landed inside it.
 
 ## Two minutes before you speak
 
@@ -162,7 +166,9 @@ Then `$A stage` again to continue — a withdrawn binding is final.
 | Everything returns 403 | The bot credential expired. Re-mint it (cold start step 4) and restart the bot |
 | `503` / "Channel verification unavailable" | Discord throttled us -- `guilds/{id}/members/{user}` allows five a second. Wait two seconds and repeat. It is not a consent problem, and since 2026-10-25 it no longer pretends to be one |
 | The bot vanished mid-demo | It exits on a dropped gateway and prints one line. `$A check` catches it; restart with cold-start steps 4 and 5. Space the demo commands a second apart |
-| `check` says the backend is down | Restart it (cold start step 3); `tail /tmp/campusos-api.log` |
+| `check` says the backend is down | Restart it (cold start step 3); `tail /tmp/campusos-api.log`. Then re-run `$A stage` -- a negotiation staged against a previous database is gone |
+| "CampusOS is unavailable" in Discord | The bot could not reach the API at all: it is down or restarting. `$A check` confirms which. Nothing was posted and nothing was confirmed |
+| `$A check` says students are not provisioned | A fresh database. `$A seed`, then `$A stage` |
 | The bot posts nothing and `say` shows 403 | Someone is out of consent. `$A restored` then `$A reconsent` |
 | Confused state, under a minute left | `$A stage` — it builds a clean consented negotiation from scratch |
 

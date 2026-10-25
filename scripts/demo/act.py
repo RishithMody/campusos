@@ -2,6 +2,7 @@
 """Stage-manager for a live CampusOS demo. One short command per beat.
 
     check       everything that has to be up, before you walk on stage
+    seed        provision the three demo students, once per database
     stage       a fresh negotiation, consented and ready to /watch. Posts nothing
     changed     the channel's membership changes -> re-consent required
     restored    put the room back as it was
@@ -19,6 +20,7 @@ deliberate beat you trigger.
 import argparse
 import asyncio
 import json
+import os
 import pathlib
 import re
 import subprocess
@@ -213,6 +215,21 @@ def cmd_check(_args):
     line(bool(ids), f"{ROSTER_FILE.name}", f"{len(ids)} account(s) can read the channel")
 
     print(f"\n{BOLD}Staged negotiation{OFF}")
+    try:
+        if (
+            httpx.get(
+                BASE + "/me",
+                headers={"Authorization": "Bearer " + token(STUDENTS["alice"])},
+                timeout=10,
+            ).status_code
+            != 200
+        ):
+            line(False, "demo students provisioned", "run: act.py seed")
+            print()
+            print(f"{RED}{BOLD}Not ready -- see FAIL above.{OFF}\n")
+            return 1
+    except Exception as e:
+        line(False, "backend reachable for /me", f"{type(e).__name__}")
     if not STATE_FILE.exists():
         line(False, "staged", "run: act.py stage")
     else:
@@ -263,6 +280,67 @@ def cmd_check(_args):
             f"{RED}{BOLD}Not ready -- see FAIL above. scripts/demo/PRESENTATION.md has the fixes.{OFF}\n"
         )
     return 0 if ok else 1
+
+
+def cmd_seed(_args):
+    """Provision the three demo students and link one Discord identity.
+
+    The link is the one control this cannot satisfy honestly. `manage link-discord`
+    verifies the student's own OAuth access token against Discord's `users/@me`; we have
+    no OAuth callback, so with CAMPUSOS_DISCORD_OAUTH_ACCESS_TOKEN set it uses the real
+    command, and without it the operator asserts the id taken from the guild's owner_id.
+    An asserted link is not a proved one, and the demo says so out loud rather than
+    quietly standing in for a ceremony that did not happen.
+    """
+    python = str(ROOT / "backend/.venv/bin/python")
+    for subject in STUDENTS.values():
+        r = subprocess.run(  # noqa: S603
+            [python, "-m", "backend.manage", "provision", subject],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        done = r.returncode == 0
+        note = "provisioned" if done else r.stderr.strip().splitlines()[-1][:60]
+        print(f"  {GREEN + 'OK  ' + OFF if done else YELLOW + 'NOTE' + OFF} {subject}: {note}")
+
+    status, guild = (
+        discord("GET", f"guilds/{GUILD}").status_code,
+        discord("GET", f"guilds/{GUILD}").json(),
+    )
+    if status != 200:
+        sys.exit(f"{RED}cannot read the guild to find a Discord identity to link{OFF}")
+    owner = guild["owner_id"]
+    linked = STUDENTS["alice"]
+
+    if os.environ.get("CAMPUSOS_DISCORD_OAUTH_ACCESS_TOKEN"):
+        r = subprocess.run(  # noqa: S603
+            [python, "-m", "backend.manage", "link-discord", linked],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        ok = r.returncode == 0
+        print(
+            f"  {GREEN + 'OK  ' + OFF if ok else RED + 'FAIL' + OFF} {linked}: "
+            f"Discord identity verified by OAuth"
+            + ("" if ok else f" -- {r.stderr.strip().splitlines()[-1][:70]}")
+        )
+        return
+    import sqlalchemy
+
+    engine = sqlalchemy.create_engine(env["CAMPUSOS_DATABASE_URL"])
+    with engine.begin() as conn:
+        conn.execute(
+            sqlalchemy.text("UPDATE students SET discord_id = :d WHERE id = :s"),
+            {"d": owner, "s": linked},
+        )
+    engine.dispose()
+    print(f"  {YELLOW}NOTE{OFF} {linked}: discord_id set to the guild owner ({owner}) by the")
+    print("          operator. No OAuth ceremony happened -- this link is asserted, not")
+    print("          proved. Set CAMPUSOS_DISCORD_OAUTH_ACCESS_TOKEN to do it properly.")
 
 
 def cmd_stage(_args):
@@ -516,6 +594,7 @@ def cmd_say(_args):
 
 COMMANDS = {
     "check": cmd_check,
+    "seed": cmd_seed,
     "stage": cmd_stage,
     "changed": cmd_changed,
     "restored": cmd_restored,

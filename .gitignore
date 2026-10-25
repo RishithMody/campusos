@@ -67,3 +67,4 @@ Thumbs.db
 worktrees/
 scripts/demo/state.json
 scripts/demo/roster.txt
+.campusos-demo/

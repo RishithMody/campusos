@@ -31,6 +31,19 @@ in `DiscordREST.audience`, and a real consent fingerprint.
 Nothing produced through `server.py` is evidence about `audience()`'s pagination,
 deduplication, or incomplete-page handling. Those remain mock-tested only.
 
+## Services
+
+`services.sh up` starts PostgreSQL and Redis on whatever ports `.env` asks for, creates
+the database and applies migrations. Idempotent. It uses Docker when the daemon is up and
+local PostgreSQL/Redis binaries when it is not, because a bare `docker compose up -d`
+fails on a laptop where Docker Desktop has not been started -- which is how it failed
+here. Data lives in `~/.campusos-demo`, deliberately not a temp directory: a demo
+database that evaporates between the rehearsal and the talk is worse than none.
+
+```sh
+./scripts/demo/services.sh up | status | stop
+```
+
 ## Prerequisites
 
 * `.env` filled in (see `backend/.env.example` and `groupchat/.env.example`).
