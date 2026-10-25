@@ -50,8 +50,18 @@ FORBIDDEN = [
 # Modules a Skill of this kind has no business importing. The privacy claim is that
 # nothing leaves the student's sandbox; an import is how that stops being true.
 BANNED_IMPORTS = {
-    "socket", "urllib", "urllib.request", "requests", "http", "http.client",
-    "httpx", "ftplib", "smtplib", "subprocess", "telnetlib", "xmlrpc",
+    "socket",
+    "urllib",
+    "urllib.request",
+    "requests",
+    "http",
+    "http.client",
+    "httpx",
+    "ftplib",
+    "smtplib",
+    "subprocess",
+    "telnetlib",
+    "xmlrpc",
 }
 
 
@@ -101,15 +111,26 @@ def audit_emissions(skill: Path) -> None:
     from datetime import date
 
     import squad_sync as ss  # noqa: PLC0415
+
     monday = date(2026, 10, 26)
     hostile = [
-        "therapy", "Dr Oyelaran", "ana.ruiz@school.edu", "CHEM 340 midterm",
-        "Planned Parenthood", "AA meeting", "job interview at Google",
-        "X:0000 B:9-0000-2359", "../../etc/passwd", "'; DROP TABLE--",
-        "busy\nSQSY1 TZ:X", "💊 refill",
+        "therapy",
+        "Dr Oyelaran",
+        "ana.ruiz@school.edu",
+        "CHEM 340 midterm",
+        "Planned Parenthood",
+        "AA meeting",
+        "job interview at Google",
+        "X:0000 B:9-0000-2359",
+        "../../etc/passwd",
+        "'; DROP TABLE--",
+        "busy\nSQSY1 TZ:X",
+        "💊 refill",
     ]
-    allowed = re.compile(r"^SQSY1 TZ:[A-Za-z_/+\-0-9]+ W:\d{4}-\d{2}-\d{2} L:(none|busy|category) "
-                         r"B:[0-9,\-a-z]* X:[0-9a-f]{4}$")
+    allowed = re.compile(
+        r"^SQSY1 TZ:[A-Za-z_/+\-0-9]+ W:\d{4}-\d{2}-\d{2} L:(none|busy|category) "
+        r"B:[0-9,\-a-z]* X:[0-9a-f]{4}$"
+    )
 
     rng = random.Random(20261024)
     for level in ("none", "busy", "category"):
@@ -118,13 +139,17 @@ def audit_emissions(skill: Path) -> None:
             blocks = []
             for _ in range(rng.randint(0, 6)):
                 start = rng.randrange(0, 1380, 15)
-                blocks.append({
-                    "day": rng.randint(1, 7),
-                    "start": start,
-                    "end": min(start + rng.choice([30, 60, 90, 120]), 1439),
-                    # Hostile category: not in the enum, and full of things that must not travel.
-                    "category": rng.choice([None, "class", "work", "personal", rng.choice(hostile)]),
-                })
+                blocks.append(
+                    {
+                        "day": rng.randint(1, 7),
+                        "start": start,
+                        "end": min(start + rng.choice([30, 60, 90, 120]), 1439),
+                        # Hostile category: not in the enum, and full of things that must not travel.
+                        "category": rng.choice(
+                            [None, "class", "work", "personal", rng.choice(hostile)]
+                        ),
+                    }
+                )
             try:
                 code = ss.encode(monday, "America/Phoenix", level, blocks)
             except ss.BadInput:
@@ -159,8 +184,7 @@ def main() -> int:
         print(f"FAIL: {skill} has no SKILL.md")
         return 1
 
-    public = [p for p in sorted(skill.rglob("*"))
-              if p.is_file() and "__pycache__" not in p.parts]
+    public = [p for p in sorted(skill.rglob("*")) if p.is_file() and "__pycache__" not in p.parts]
 
     audit_files(skill, public)
     audit_imports(skill)

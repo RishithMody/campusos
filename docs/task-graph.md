@@ -96,6 +96,7 @@ the Track 2 agent-to-agent message, and the Track 3 group-chat payload. The back
 | T9 | **Track 3 group chat assistant (Discord)** | 3 | Frontend Engineer | Codex | T1, T2 | `DONE` |
 | T10 | **Track 2 submission package** | 2 | Orchestrator | Claude Code | T0b, T7 | `BLOCKED` |
 | T11 | **Track 3 submission package** | 3 | Orchestrator | Claude Code | T0b, T9 | `BLOCKED` |
+| T12 | **Independent review findings** (audience identity, publish window, README) | 2·3 | Orchestrator | Claude Code | T9, T7c, T7d | `OWNER_AUTHORIZED_REVIEW_WAIVED` |
 
 ## Project status — development closed 2026-10-25
 
@@ -622,9 +623,9 @@ Both T2 and T9 passed review, and both said plainly what they had not done. This
   `channel-bindings`, because T2's GET requires participant authorization and refuses bot
   credentials. The bot relies on the `channel-summary` 403 gate instead. Confirm the live
   system behaves the same way.
-- **Same-size audience substitution is a known, documented gap** in the frozen contract: a room
-  that swaps one member for another keeps its count and does not trigger re-consent. Do not
-  "fix" it here — it needs a contract change and the Orchestrator.
+- ~~Same-size audience substitution is a known, documented gap.~~ **Fixed in T12**
+  (2026-10-25). It needed no contract change: the audience digest is server-side state, and
+  `audience_size_at_consent` still reports the count. See `docs/agents/reviews/T12/findings.md`.
 - A signed human-kind token claim is **not** proof of a human ceremony unless the issuer
   enforces it. Probe that boundary.
 
@@ -756,7 +757,8 @@ silent pass. A Discord test that no-ops without a token is worse than none.
 - **The bot does not poll `channel-bindings`** — T2's GET refuses bot credentials, so the bot
   relies on the `channel-summary` 403 gate. Documented deviation, not a bug. Confirm live
   behaviour matches.
-- **Same-size audience substitution is a known contract gap.** Do not fix it here.
+- ~~Same-size audience substitution is a known contract gap.~~ **Fixed in T12** (2026-10-25):
+  consent is recorded against an audience digest, not a count. No contract field changed.
 - `FakeDiscord` lives in `tests/live/environment.py` and in both suite conftests. Replacing it
   for the live suite is your job; **leave the mock path working**, because CI has no token.
 
@@ -971,6 +973,58 @@ before finalising.
 - [ ] Public GitHub repo link ready; website and demo video optional
 - [ ] Submitted from the same account that owns the Track 1 entry
 - [ ] Field limits respected, as T10
+
+---
+
+## T12 — Independent review findings
+
+| | |
+|---|---|
+| **Agent** | Orchestrator, at the owner's direction |
+| **Depends on** | T9 ✅, T7c ✅, T7d ✅ |
+| **Status** | `OWNER_AUTHORIZED_REVIEW_WAIVED` — committed 2026-10-25. The owner waived the independent review explicitly: "I do not require another independent Codex review" |
+| **Branch / worktree** | none — committed directly to `main` under owner authorization |
+| **Findings** | `docs/agents/reviews/T12/findings.md` |
+| **GPU approval** | `NONE` |
+
+An independent code review supplied by the owner reported three findings. Two confirmed, one
+partly disproven.
+
+- **HIGH, confirmed — same-size audience substitution bypassed re-consent.** The gap this
+  repository had carried as a documented limitation since T1 turned out to be exploitable by
+  **two** paths, not one: the reported same-size swap, and a shrink-then-regrow that the review
+  did not mention. Consent is now recorded against a one-way, channel-scoped digest of the
+  verified viewer IDs, compared on every summary read. **No contract field changed** — the
+  digest is server-side state, and two description strings that asserted the old behaviour were
+  corrected.
+- **MEDIUM, partly disproven — revocation during publishing.** The window is real and
+  irreducible; it is not an unauthorized disclosure. The check is serialized against withdrawal
+  inside the backend's transaction, and what escapes the window is a frozen sentence the binding
+  had already authorized. The one real gap — `update` returning `False` was advice, not
+  enforcement — is fixed: a refused `Publisher` is spent and stops polling as well as posting.
+- **MEDIUM, confirmed — the README claimed no product code existed.** Rewritten.
+
+Also fixed, because CI had been red on `main` since 2026-10-25 while the commit message said
+otherwise: the contracts workflow installed only PyYAML (the validator correctly refuses to
+report success without `jsonschema` and `openapi-spec-validator`), the integration workflow set
+`DATABASE_URL` instead of `CAMPUSOS_DATABASE_URL`, and `ruff format --check .` disagreed with
+`pyproject.toml`'s stated intent that review artifacts are evidence.
+
+### Acceptance criteria
+
+- [x] Both exploit paths reproduced before being fixed, and the reproductions recorded
+- [x] Any change to the verified audience forces re-consent; an unchanged audience does not
+- [x] An audience that cannot be identified fails closed
+- [x] No viewer ID and no digest reaches a binding view, a summary, or a log
+- [x] No frozen contract field, type, enum, `required` list or fixture changed
+- [x] Mutation-tested: M12–M16 added, all killed; M7's survival proven equivalent
+- [x] Full suite green, including against real PostgreSQL and Redis
+- [ ] **Live Discord verification — still not done.** T7b is unchanged by this work
+
+### What this did not fix
+
+`fingerprint` inherits `can_view`'s unverified premise exactly: a digest over a wrongly
+computed viewer set is a confidently wrong digest. T7b is still the work that would find out.
 
 ---
 

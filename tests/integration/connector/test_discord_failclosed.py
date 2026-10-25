@@ -7,8 +7,10 @@ tests at all. `can_view` was pinned against fixtures; the HTTP client around it 
 Everything here uses `httpx.MockTransport`. No Discord connection, no token.
 
 Two cases exist because review attempt 1 found the mutants they kill. An audience that
-is wrong *downwards* is the dangerous direction: it cannot trip the audience-growth
-re-consent rule, so a room can quietly grow past what anyone consented to.
+is wrong *downwards* was the dangerous direction under the audience-growth re-consent
+rule those cases were written against: a room could quietly grow past what anyone
+consented to. T12 replaced that rule with an audience-identity comparison, and the cases
+still hold -- a miscounted room is a misidentified room.
 """
 
 import asyncio
@@ -230,8 +232,11 @@ def test_an_audience_of_zero_is_never_returned():
 
     `context()` has already proved this bot is a member who can view the room, so a count
     that does not include it is arithmetically impossible and means the enumeration was
-    incomplete. The dangerous direction is *down*: `channel_summary` re-asks for consent
-    only when the audience GREW, so an undercount never closes the gate.
+    incomplete. This mattered doubly before T12, when `channel_summary` re-asked for consent
+    only if the audience had *grown*: an undercount could never close the gate. The gate now
+    compares audience identity, so a partial enumeration would instead read as a membership
+    change and demand re-consent for a room that never changed. Refusing is still the only
+    correct answer -- a set that is missing members is not the room's audience either way.
 
     Until T7d this was a strict xfail recording an open defect. It is now an ordinary
     assertion. Note the fixed behaviour is to **refuse**, not to return a corrected count

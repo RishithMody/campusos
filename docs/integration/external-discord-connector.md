@@ -416,7 +416,7 @@ because they test our side of the boundary. Worth doing now.
 | L6 | Channel in another guild | 403 |
 | L7 | Full consent cycle, 3 students | one summary posted per state change, no duplicates |
 | L8 | One participant withdraws | posting stops within one poll; **nothing said in-channel** |
-| L9 | Audience grows past `audience_size_at_consent` | `pending_reconsent`, posting stops |
+| L9 | Verified audience changes at all — join, departure, or same-size swap | `pending_reconsent`, posting stops |
 | L10 | Rate limit | no crash, no double-post |
 | L11 | Full transcript | every line one of the nine frozen sentences |
 | L12 | Backend down mid-watch | connector stops, posts nothing |

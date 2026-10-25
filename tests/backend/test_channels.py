@@ -64,7 +64,7 @@ def test_channel_consent_reconsent_and_withdrawal(env):
     assert "alice" not in response.text
     assert env.client.get(url, headers=env.headers()).status_code == 403
     assert env.client.get(url, headers=env.headers("otherbot", "bot")).status_code == 403
-    env.discord.size = 4
+    env.discord.viewers.add("99")
     assert env.client.get(url, headers=env.headers("bot", "bot")).status_code == 403
     bindings = env.client.get(
         f"/v1/negotiations/{neg}/channel-bindings", headers=env.headers()
@@ -176,7 +176,7 @@ def test_obsolete_channel_approval_cannot_confirm_new_audience(env):
         == 204
     )
     assert read(env, neg, "bob")["pending_approvals"] == []
-    env.discord.size = 10
+    env.discord.viewers = {str(n) for n in range(90, 100)}
     response = env.client.post(
         f"/v1/negotiations/{neg}/channel-bindings",
         headers=env.headers(),

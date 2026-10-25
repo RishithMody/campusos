@@ -1,3 +1,5 @@
+import hashlib
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -11,12 +13,46 @@ ADMINISTRATOR = 1 << 3
 
 @dataclass(frozen=True)
 class Audience:
+    """Who can read a room, as a count and as an identity.
+
+    `fingerprint` is what consent is actually recorded against. A count cannot tell one
+    audience of four from a different audience of four, and a room that swaps a member
+    keeps its count while a new person gains the ability to read it.
+    """
+
     guild: str
     size: int
     timezone: str = "UTC"
+    fingerprint: str = ""
+
+
+def fingerprint(channel: str, guild: str, viewers: Iterable[str]) -> str:
+    """A deterministic, channel-scoped digest of exactly which accounts can read a room.
+
+    One-way on purpose. The service needs to answer "is this the same audience?" and must
+    not be able to answer "who is in it?": the viewer IDs are consumed here and never
+    reach the service, a binding, a summary, or a log.
+
+    Scoped to the guild and channel, so the same member set in two rooms digests
+    differently and a digest recorded for one room means nothing in another. Lengths are
+    prefixed so no two different member sets can concatenate to the same input.
+    """
+    digest = hashlib.sha256(b"campusos/discord-audience/v1\n")
+    for part in (guild, channel):
+        digest.update(f"{len(part)}:{part}\n".encode())
+    for viewer in sorted(viewers):
+        digest.update(f"{len(viewer)}:{viewer}\n".encode())
+    return digest.hexdigest()
 
 
 class Discord(Protocol):
+    """Any implementation must return a non-empty `Audience.fingerprint`.
+
+    The service refuses to record or re-check consent without one, so an adapter that
+    counts an audience it cannot identify fails closed instead of degrading to the
+    headcount comparison this replaced.
+    """
+
     async def audience(self, channel: str, guild: str) -> Audience: ...
     async def member(self, channel: str, guild: str, user: str) -> bool: ...
 
@@ -116,11 +152,14 @@ class DiscordREST:
                 if len(members) < 1000:
                     # context() already proved this bot is a member who can view the room,
                     # so a result without it means the enumeration was incomplete. Consent
-                    # is given against this number, and an undercount is the dangerous
-                    # direction: re-consent only fires when the audience GREW.
+                    # is recorded against this set, and a partial set is a different set:
+                    # it would read as a membership change and demand re-consent for a room
+                    # that never changed. Fail closed instead of guessing.
                     if identity not in visible:
                         raise Problem(503, "Channel verification unavailable")
-                    return Audience(guild, len(visible))
+                    return Audience(
+                        guild, len(visible), fingerprint=fingerprint(channel, guild, visible)
+                    )
                 following = str(max(int(m["user"]["id"]) for m in members))
                 if int(following) <= int(after):
                     break

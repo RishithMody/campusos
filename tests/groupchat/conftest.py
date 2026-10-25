@@ -11,7 +11,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from backend.app import create_app
-from backend.channels.discord import Audience
+from backend.channels.discord import Audience, fingerprint
 from backend.common import identifier, now
 from backend.config import Settings
 from backend.db.ephemeral import Ephemeral
@@ -20,13 +20,29 @@ from backend.inference.mock import MockInference
 
 
 class FakeDiscord:
-    size = 3
+    """`viewers` is mutable so a test can grow, shrink or swap the room.
+
+    Identity, not a count: a fake that only tracked a size could not reproduce the
+    same-size membership swap, which is exactly the case the real gate exists for.
+    `member` keeps its own fixed set, so changing the audience does not change who is
+    allowed to link a channel.
+    """
+
+    def __init__(self):
+        self.viewers = {"1", "2", "3"}
+        self.linkable = {"1", "2", "3"}
+
+    @property
+    def size(self):
+        return len(self.viewers)
 
     async def audience(self, channel, guild):
-        return Audience(guild, self.size)
+        return Audience(
+            guild, len(self.viewers), fingerprint=fingerprint(channel, guild, self.viewers)
+        )
 
     async def member(self, channel, guild, user):
-        return user in {"1", "2", "3"}
+        return user in self.linkable
 
 
 @pytest.fixture

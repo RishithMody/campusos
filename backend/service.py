@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from backend.agents.workflow import Workflow, fits
 from backend.auth import Identity
-from backend.channels.discord import Discord
+from backend.channels.discord import Audience, Discord
 from backend.channels.summary import summary
 from backend.common import Problem, identifier, instant, now, timestamp
 from backend.db.models import Approval, Channel, Commitment, Grant, Negotiation, Student
@@ -116,6 +116,18 @@ class Service:
                 data=details,
             )
         )
+
+    @staticmethod
+    def audience_identity(audience: Audience) -> str:
+        """The value channel consent is recorded against, never a count.
+
+        An adapter that counted a room it cannot identify fails closed here. Without this
+        the comparison would silently succeed against an empty fingerprint on both sides,
+        which is the headcount bug this replaced wearing a different hat.
+        """
+        if not audience.fingerprint:
+            raise Problem(503, "Channel verification unavailable")
+        return audience.fingerprint
 
     def retire_channel_approvals(self, negotiation: str, channel: str) -> None:
         for approval in self.pending(negotiation):
@@ -605,6 +617,7 @@ class Service:
             "status": "pending_consent",
             "level": channel.level,
             "size": audience.size,
+            "audience": self.audience_identity(audience),
             "decisions": {owner: None for owner in data["members"]},
         }
         self.retire_channel_approvals(negotiation, channel_id)
@@ -639,10 +652,16 @@ class Service:
         if not binding or binding["status"] != "confirmed":
             raise Problem(403)
         audience = await self.discord.audience(channel.platform_id, channel.guild)
-        if audience.size > binding["size"]:
+        # Any change to *who* can read the room, not just how many: a room that swaps one
+        # member for another keeps its count while a new person gains the ability to read
+        # the summary. A shrink counts too -- it is harmless in itself, but a binding whose
+        # recorded audience is never lowered lets the room regrow to its old size with
+        # different people in it. A binding with no recorded audience fails closed.
+        if self.audience_identity(audience) != binding.get("audience"):
             binding.update(
                 status="pending_reconsent",
                 size=audience.size,
+                audience=audience.fingerprint,
                 decisions={owner: None for owner in data["members"]},
             )
             binding.pop("confirmed_at", None)

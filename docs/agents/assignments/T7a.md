@@ -124,9 +124,10 @@ when the service is absent is worse than no test, because it reports success.
 - **T9's integration deviation is not a bug.** The bot does not poll `channel-bindings`:
   T2's GET requires participant authorization and refuses bot credentials, so the bot relies
   on the `channel-summary` 403 gate. Confirm the live system behaves the same way.
-- **Same-size audience substitution is a known, documented gap** in the frozen contract — a
-  room that swaps one member for another keeps its count and does not re-trigger consent. Do
-  not fix it here; it needs a contract change and the Orchestrator.
+- ~~Same-size audience substitution is a known, documented gap.~~ **Fixed in T12**
+  (2026-10-25) after independent review found it exploitable. Consent is now recorded
+  against a channel-scoped digest of the verified viewer IDs, so a join, a departure and a
+  same-size swap all force re-consent. No contract field changed.
 - **A signed human-kind token claim is not proof of a human ceremony** unless the issuer
   enforces it. The entire consent model rests on that. Probe the boundary and report.
 - Setup commands: `backend/README.md` and `groupchat/README.md`. Both venvs are gitignored.

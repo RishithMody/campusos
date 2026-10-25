@@ -6,11 +6,28 @@ at-a-glance operational view.
 
 Live view from the shell: `./scripts/agents.sh status`
 
-Last updated: **2026-10-24** — T0 complete, scope expanded to all three Cubbie tracks.
+Last updated: **2026-10-25** — T12: independent review findings investigated and fixed.
 
 ---
 
-## Headline
+## Headline — 2026-10-25
+
+**An independent review found a real privacy bypass, and it is fixed.** Channel consent
+compared audience *size*, so a room that swapped one member for another never re-asked. Both
+that path and a shrink-then-regrow path the review missed are closed: consent is now recorded
+against a one-way digest of *which* accounts can read the room. `docs/agents/reviews/T12/findings.md`.
+No contract field changed. Full suite green against real PostgreSQL and Redis.
+
+**CI was red on `main` and is expected green again.** Three workflows had been failing since
+2026-10-25 for configuration reasons unrelated to the product: missing validator dependencies,
+a pre-T2 environment variable name, and a formatter disagreeing with `pyproject.toml`. All
+three are fixed, and every command they run was verified locally. **The workflow files
+themselves cannot be executed without a push, and pushing is not authorized** — so that
+expectation is reasoning, not evidence.
+
+**The one gap that matters is unchanged: nothing has ever touched Discord.** T7b.
+
+## Previous headline (2026-10-24)
 
 **All three submission windows are open right now, and no close time is set.** Checked live
 2026-10-24T18:50:26Z against the organizers' database. There is no verified deadline anywhere —
@@ -34,6 +51,7 @@ kept **validated and submittable on short notice**.
 
 | Slot | Agent | Task | CLI | Worktree | State |
 |---|---|---|---|---|---|
+| — | Orchestrator | T12 | claude | `~/campusos` (primary) | **`OWNER_AUTHORIZED_REVIEW_WAIVED`** — committed 2026-10-25, review waived by the owner |
 | — | Orchestrator | T0 | claude | `~/campusos` (primary) | **`DONE`** — signed off 2026-10-24 |
 | — | Backend Engineer | T2 | codex | — | **`DONE`** — merged 2026-10-24 |
 | — | Frontend Engineer | T9 | codex | — | **`DONE`** — merged 2026-10-24. **Not live-verified** |

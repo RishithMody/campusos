@@ -65,11 +65,13 @@ def test_three_students_real_backend_mock_inference(env, no_overlap):
             neg = state["negotiation_id"]
             channel = await api.register(1234)
             bind(env, neg, channel)
-            publisher = Publisher(api)
-            assert not await publisher.update(neg, channel, send)
+            assert not await Publisher(api).update(neg, channel, send)
             assert not messages
             for who in ("alice", "bob", "carol"):
                 consent(env, neg, "post_to_channel", who=who)
+            # A refused publisher is spent, exactly as the bot's watcher is: it breaks
+            # out of its loop on the first False. Resuming is a new publisher.
+            publisher = Publisher(api)
             assert await publisher.update(neg, channel, send)
             assert messages == ["Collecting availability from 3 people."]
             grants(env, state, window)
@@ -133,7 +135,7 @@ def test_consent_denial_posts_nothing(env, change):
                         == 204
                     )
                 else:
-                    env.discord.size = 4
+                    env.discord.viewers.add("99")
             assert not await publisher.update(neg, channel, send)
             assert messages == []
             if change == "growth":
@@ -141,6 +143,104 @@ def test_consent_denial_posts_nothing(env, change):
                     consent(env, neg, "post_to_channel", who=who)
                 assert await Publisher(api).update(neg, channel, send)
                 assert len(messages) == 1
+        finally:
+            await api.close()
+
+    asyncio.run(scenario())
+
+
+def withdraw(env, neg, channel, who="bob"):
+    response = env.client.delete(
+        f"/v1/negotiations/{neg}/channel-bindings/{channel}", headers=env.headers(who)
+    )
+    assert response.status_code == 204, response.text
+
+
+def test_consent_revoked_between_authorization_and_send(env):
+    """The window no architecture closes: authorized here, posted in Discord.
+
+    `send` withdraws consent before the message lands, which is the worst ordering
+    available -- the post is already in flight when the binding dies. What must hold is
+    not that the post never happens; it is that the post is one the room was already
+    consented to receive, that nothing further is published, and that the publisher does
+    not have to be told twice.
+    """
+
+    async def scenario():
+        api = client(env)
+        messages = []
+        try:
+            state, _ = create(env)
+            neg = state["negotiation_id"]
+            channel = await api.register(1234)
+            bind(env, neg, channel)
+            for who in ("alice", "bob", "carol"):
+                consent(env, neg, "post_to_channel", who=who)
+
+            async def send(text):
+                # Revocation commits while this message is on its way to Discord.
+                withdraw(env, neg, channel)
+                messages.append(text)
+
+            publisher = Publisher(api)
+            assert await publisher.update(neg, channel, send)
+            assert messages == ["Collecting availability from 3 people."]
+
+            # Nothing more is published, by this publisher or a fresh one.
+            assert not await publisher.update(neg, channel, send)
+            assert not await Publisher(api).update(neg, channel, send)
+            assert len(messages) == 1
+        finally:
+            await api.close()
+
+    asyncio.run(scenario())
+
+
+def test_a_refused_publisher_stops_asking_as_well_as_stops_posting(env):
+    """The stop is local, not advisory: a caller that ignores False still publishes nothing.
+
+    Checked by counting requests, because a publisher that kept polling would keep a
+    withdrawn negotiation's summary one authorization away from the room.
+    """
+
+    async def scenario():
+        paths = []
+
+        def handle(request):
+            paths.append(request.url.path)
+            response = env.client.request(
+                request.method,
+                str(request.url),
+                content=request.content,
+                headers=dict(request.headers),
+            )
+            return httpx.Response(response.status_code, content=response.content)
+
+        token = env.headers("bot", "bot")["Authorization"].removeprefix("Bearer ")
+        api = API("http://localhost/v1", token, transport=httpx.MockTransport(handle))
+        messages = []
+
+        async def send(text):
+            messages.append(text)
+
+        try:
+            state, _ = create(env)
+            neg = state["negotiation_id"]
+            channel = await api.register(1234)
+            bind(env, neg, channel)
+            for who in ("alice", "bob", "carol"):
+                consent(env, neg, "post_to_channel", who=who)
+            publisher = Publisher(api)
+            assert await publisher.update(neg, channel, send)
+            withdraw(env, neg, channel)
+            paths.clear()
+            assert not await publisher.update(neg, channel, send)
+            refused = len(paths)
+            assert refused == 1
+            for _ in range(5):
+                assert not await publisher.update(neg, channel, send)
+            assert len(paths) == refused, paths
+            assert messages == ["Collecting availability from 3 people."]
         finally:
             await api.close()
 

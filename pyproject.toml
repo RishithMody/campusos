@@ -7,7 +7,11 @@
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-exclude = [".venv", "venv", "node_modules", "frontend", ".git"]
+# `docs/agents/reviews/**` is excluded outright, not just from the lint rules below:
+# a reproduction script is evidence of what was run, and reformatting it changes the
+# thing it is evidence of. CI runs `ruff format --check .` over everything else, so
+# without this the formatter and that intent contradict each other and CI stays red.
+exclude = [".venv", "venv", "node_modules", "frontend", ".git", "docs/agents/reviews"]
 
 [tool.ruff.lint]
 select = [
@@ -29,9 +33,6 @@ ignore = [
 # CI runner scripts shell out to a known interpreter path on purpose, and generate
 # hostile test payloads with the stdlib RNG -- neither is a cryptographic use.
 "scripts/ci/**" = ["S110", "S311", "S603", "S606", "S607"]
-# Review artifacts are evidence produced by the reviewer. Reformatting a reproduction
-# script would change the thing it is evidence of.
-"docs/agents/reviews/**" = ["S101", "S102"]
 
 [tool.mypy]
 python_version = "3.11"

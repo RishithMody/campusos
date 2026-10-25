@@ -2,7 +2,12 @@
 
 **Task:** T0. **Status:** verified against official sources on the dates shown.
 **Rule for this file:** every claim carries a source and a date checked. Anything not published
-is recorded under [`## Published and submitted
+is recorded under [`## Unverified`](#unverified), never guessed. If you add to this file, keep
+that property — a fabricated requirement here propagates into every other task.
+
+Last checked: **2026-10-24**.
+
+## Published and submitted
 
 | | |
 |---|---|
@@ -14,11 +19,6 @@ is recorded under [`## Published and submitted
 
 Cubbie installs the **newest commit**, so pushing to that repo updates the Skill for everyone
 who has it. No resubmission, and no lost votes.
-
-## Unverified`](#unverified), never guessed. If you add to this file, keep
-that property — a fabricated requirement here propagates into every other task.
-
-Last checked: **2026-10-24**.
 
 ---
 

@@ -130,15 +130,20 @@ For commands abbreviated as `student ...` above, use
   stops that watcher without posting any negotiation information. Logs contain fixed
   messages only. No cached summary is replayed after an error. `/schedule` registration
   outages give a generic ephemeral error; background failures stay silent in the room.
-- Audience growth makes T2 raise new human approvals. Approve privately, then issue
+- Any change to the verified audience -- a join, a departure, or one account replacing
+  another -- makes T2 raise new human approvals. Approve privately, then issue
   `/watch` again. `student withdraw NEGOTIATION CHANNEL` revokes channel consent;
   the next summary request is denied. Already sent messages remain visible.
 - One watcher per room, ten-second interval, maximum 90 checks. Terminal outcomes stop
   it. Restarting loses watchers; `/watch` explicitly resumes. Discord SDK handles its
   transport rate limits; application mutations are not automatically retried.
 - Permission/consent checks and Discord delivery are separate network operations.
-  Revocation cannot retract an in-flight post. The frozen API has no atomic delivery
-  lease. T2 detects audience growth, not same-size member substitution.
+  Revocation cannot retract an in-flight post, and no arrangement of a distributed
+  authorization check and an external send closes that window. What bounds it: every
+  post is preceded by its own check, the check is serialized against withdrawal inside
+  T2's transaction, a post that escapes the window is a frozen template the binding had
+  already authorized, and a refused publisher is spent -- it neither posts nor polls
+  again, whether or not its caller honours the result.
 
 ## Verification and live checklist
 

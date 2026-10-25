@@ -20,7 +20,11 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-SUITE = "tests/integration/connector/"
+# The mutated surfaces are no longer all covered by the connector suite alone: the
+# audience-identity gate is pinned there, but the publisher latch lives in the groupchat
+# suite and the channel gate in the backend one. A mutation is only "killed" if the whole
+# set of suites that cover it runs.
+SUITES = ("tests/integration/connector/", "tests/groupchat/", "tests/backend/")
 SKIP = {".git", ".venv", "venv", "node_modules", "__pycache__", ".pytest_cache", ".mypy_cache"}
 
 # (id, file, what it removes, old text, new text)
@@ -67,10 +71,18 @@ MUTATIONS = [
         'if self.identity.kind != "bot" or not self.identity.guild:',
         'if self.identity.kind != "bot":',
     ),
+    # M7 is an *equivalent* mutant, demonstrated rather than assumed (T12, 2026-10-25):
+    # with the isinstance guard removed, every non-list body -- {}, {"a": 1}, "string", 7,
+    # None, [{"bad": 1}] -- still raises Problem(503), either through the surrounding
+    # `except (KeyError, TypeError, ValueError)` or through the bot-not-in-`visible` check.
+    # The guard is defence in depth and states the intent locally; it changes no outcome.
+    # It survives because there is no behaviour left to observe, not because a test is
+    # missing. Keep it in the list: if the except clause is ever narrowed, it will start
+    # failing, and that is exactly when someone needs to know.
     (
         "M7",
         "backend/channels/discord.py",
-        "malformed member page guard removed",
+        "malformed member page guard removed (equivalent -- see note above)",
         "                if not isinstance(members, list):",
         "                if False:",
     ),
@@ -102,6 +114,42 @@ MUTATIONS = [
         "            or channel.guild != self.identity.guild\n",
         "",
     ),
+    # T12. The audience-identity gate and the publisher latch.
+    (
+        "M12",
+        "backend/service.py",
+        "re-consent compares headcount again, not audience identity",
+        'if self.audience_identity(audience) != binding.get("audience"):',
+        'if audience.size > binding["size"]:',
+    ),
+    (
+        "M13",
+        "backend/service.py",
+        "an audience that cannot be identified no longer fails closed",
+        "        if not audience.fingerprint:",
+        "        if False:",
+    ),
+    (
+        "M14",
+        "backend/service.py",
+        "bind records no audience identity to compare against",
+        '            "audience": self.audience_identity(audience),\n',
+        "",
+    ),
+    (
+        "M15",
+        "backend/channels/discord.py",
+        "the fingerprint ignores who is in the room",
+        '    for viewer in sorted(viewers):\n        digest.update(f"{len(viewer)}:{viewer}\\n".encode())',
+        '    for viewer in sorted(viewers):\n        digest.update(b"")',
+    ),
+    (
+        "M16",
+        "groupchat/publisher.py",
+        "a refused publisher is reusable; the stop is advisory again",
+        "        if self.stopped:\n            return False\n",
+        "",
+    ),
 ]
 
 
@@ -115,7 +163,7 @@ def apply(target: Path, path: str, old: str, new: str) -> None:
 
 def run_suite(cwd: Path, python: str) -> tuple[bool, str]:
     result = subprocess.run(  # noqa: S603
-        [python, "-m", "pytest", SUITE, "-q", "--no-header", "-p", "no:cacheprovider"],
+        [python, "-m", "pytest", *SUITES, "-q", "--no-header", "-p", "no:cacheprovider"],
         cwd=cwd,
         capture_output=True,
         text=True,

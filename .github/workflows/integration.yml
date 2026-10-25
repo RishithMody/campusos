@@ -37,9 +37,13 @@ jobs:
           --health-timeout 5s --health-retries 5
 
     env:
+      # These are the names the application actually reads (backend/config.py and
+      # backend/db/migrations/env.py). `DATABASE_URL`/`REDIS_URL` were set here before
+      # T2 landed, and the migration step failed with KeyError: 'CAMPUSOS_DATABASE_URL'.
+      # The driver prefix matters too: the project uses psycopg 3, not psycopg2.
       CAMPUSOS_INFERENCE_MODE: mock
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/campusos_test
-      REDIS_URL: redis://localhost:6379/0
+      CAMPUSOS_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/campusos_test
+      CAMPUSOS_REDIS_URL: redis://localhost:6379/0
 
     steps:
       - uses: actions/checkout@v4
@@ -64,8 +68,13 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install pytest
-          for req in backend/requirements.txt requirements-dev.txt; do
-            if [ -f "$req" ]; then pip install -r "$req"; fi
+          # groupchat/requirements-dev.txt pulls in backend/requirements-dev.txt, which
+          # pulls in backend/requirements.txt. The privacy suite below collects the whole
+          # tests/ tree, including the groupchat tests, so discord.py and fakeredis have
+          # to be present or collection fails before a single assertion runs.
+          for req in groupchat/requirements-dev.txt backend/requirements-dev.txt \
+                     backend/requirements.txt; do
+            if [ -f "$req" ]; then pip install -r "$req"; break; fi
           done
 
       - name: Migrations

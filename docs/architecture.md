@@ -303,9 +303,11 @@ everyone: an audience cannot be partially un-told.
   over-disclosures, and that is a real second net, but the primary guarantee is the server-side
   filter on egress and it does not exist until T2. No runtime privacy claim in this document has
   been tested against a running service; T2 and T7 own that evidence.
-- Channel consent is to an audience *size*, not to a membership list. A room that swaps one
-  member for another keeps the same count and does not trigger re-consent. Growth is caught;
-  substitution is not.
+- Channel consent is to an audience *identity*, not to a size. `audience()` returns a one-way,
+  channel-scoped digest of the verified viewer IDs and `channel_summary` re-derives it on every
+  read, so a join, a departure, or a same-size substitution all force re-consent. This document
+  specified a size comparison; that shipped, was found exploitable by independent review, and
+  was replaced in T12 -- see `docs/agents/reviews/T12/findings.md`.
 - `channel-summary.text` is free prose composed server-side, and no schema can check it. It is
   the one place where a careless sentence reaches a group chat, and it rests entirely on T2's
   implementation being careful. The `free_busy` ceiling bounds what it has to work with.

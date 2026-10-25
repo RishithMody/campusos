@@ -652,7 +652,7 @@ paths:
           description: |
             No confirmed binding for this negotiation and channel. Covers every reason: never
             requested, still `pending_consent`, `declined`, `withdrawn`, or `pending_reconsent`
-            because the room grew. The body does not say which — a bot that learned "declined"
+            because the audience changed. The body does not say which — a bot that learned "declined"
             rather than "pending" would be able to report a private no into the channel.
 
             **This is the missing-consent rejection.** The bot's only correct response is to say
@@ -752,9 +752,9 @@ components:
           description: |
             `pending_consent`: approvals are out. `confirmed`: every participant approved, and
             the summary endpoint serves. `declined`: at least one said no. `withdrawn`: consent
-            was taken back. `pending_reconsent`: the channel's membership grew since consent was
-            given, so the audience is no longer the one anybody agreed to — see
-            `audience_size_at_consent`.
+            was taken back. `pending_reconsent`: the channel's verified membership *changed*
+            since consent was given — anyone joined, anyone left, or one account replaced
+            another — so the audience is no longer the one anybody agreed to.
           enum: [pending_consent, confirmed, declined, withdrawn, pending_reconsent]
         confirmations_outstanding:
           type: integer
@@ -767,10 +767,15 @@ components:
           type: integer
           minimum: 0
           description: |
-            Channel members when consent was given. The backend compares it to the live count:
-            if the room has grown, the binding moves to `pending_reconsent` and the summary
-            endpoint returns 403 until the participants agree again. Consent is to an audience,
-            not to a name, and a room that doubles is a different audience.
+            How many accounts could read the channel when consent was given. Reported for the
+            student's benefit; it is **not** what the gate compares. The backend records a
+            one-way, channel-scoped digest of *which* accounts those were, and re-checks that
+            on every summary read: any change moves the binding to `pending_reconsent` and the
+            summary endpoint returns 403 until the participants agree again. Consent is to an
+            audience, not to a name and not to a headcount — a room that swaps one member for
+            another is a different audience at the same size. The digest is never published
+            here: a count tells a student how far their words travel, while the identities
+            behind it are the room's business and not the negotiation's.
         confirmed_at: { type: string, format: date-time }
 
     ChannelSummary:

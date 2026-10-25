@@ -83,6 +83,7 @@ def _reexec_under_venv() -> None:
     try:
         import jsonschema  # noqa: F401
         import yaml  # noqa: F401
+
         return
     except ImportError:
         pass
@@ -92,7 +93,9 @@ def _reexec_under_venv() -> None:
 
         common = subprocess.run(
             ["git", "-C", str(ROOT), "rev-parse", "--path-format=absolute", "--git-common-dir"],
-            capture_output=True, text=True, check=True,
+            capture_output=True,
+            text=True,
+            check=True,
         ).stdout.strip()
         if common:
             primary = Path(common).parent

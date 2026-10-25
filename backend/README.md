@@ -97,9 +97,16 @@ Register with the guild-bound bot token; link members with their human tokens;
 request a negotiation/channel binding; every participant confirms via the ordinary
 approval endpoint. The backend checks Discord permissions and paginates guild
 members to count the actual text-channel audience, requiring Guild Members intent.
-Unsupported thread/DM channels fail closed. Audience growth requires re-consent;
-one withdrawal ends posting. Substitution at the same audience size remains the
-explicit frozen-contract limitation.
+Unsupported thread/DM channels fail closed. One withdrawal ends posting.
+
+Consent is recorded against **who** can read the room, not how many: `audience()`
+returns a one-way, channel-scoped SHA-256 digest of the verified viewer IDs, and
+`channel_summary` re-derives and compares it on every read. Any change — a join, a
+departure, or one account replacing another at the same size — moves the binding to
+`pending_reconsent` and refuses the summary until every participant agrees again. A
+binding whose audience cannot be identified fails closed. The viewer IDs are consumed
+inside `channels/discord.py`; neither they nor the digest reach a binding view, a
+summary, or a log.
 
 `channels/summary.py` has no inference dependency. It emits only the contract's
 closed template IDs, integers, opaque negotiation ID, timestamps and timezone.

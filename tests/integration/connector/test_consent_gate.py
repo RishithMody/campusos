@@ -65,12 +65,12 @@ def test_c5_every_unconsented_state_is_byte_identical(env):
     )
     responses["withdrawn"] = env.client.get(summary_url(neg, channel), headers=bot)
 
-    # pending_reconsent -- confirmed, then the room grew
+    # pending_reconsent -- confirmed, then the audience changed
     neg, channel = confirmed_channel(env, platform="1004")
     for who in ("alice", "bob", "carol"):
         decide(env, neg, who)
     assert env.client.get(summary_url(neg, channel), headers=bot).status_code == 200
-    env.discord.size = 4
+    env.discord.viewers.add("99")
     responses["pending_reconsent"] = env.client.get(summary_url(neg, channel), headers=bot)
 
     assert set(responses) == {

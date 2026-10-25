@@ -69,8 +69,10 @@ def audience(transport):
 def test_an_empty_member_page_is_refused_not_counted_as_zero():
     """P1. `[]` is a well-formed list, so the list guard passes and the old code returned 0.
 
-    Re-consent only fires when the audience GREW, so an undercount is the dangerous
-    direction: a room can grow past what anyone agreed to without the gate ever closing.
+    An undercount was the dangerous direction under the pre-T12 rule, which re-asked for
+    consent only when the audience had grown: a room could grow past what anyone agreed to
+    without the gate ever closing. The gate now compares audience identity, and a partial
+    enumeration is a different set either way, so refusing remains the only correct answer.
     """
     with pytest.raises(Problem) as caught:
         audience(discord([[]]))

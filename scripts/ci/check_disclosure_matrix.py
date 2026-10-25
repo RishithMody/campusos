@@ -54,6 +54,7 @@ def _reexec_under_venv() -> None:
     try:
         import jsonschema  # noqa: F401
         import yaml  # noqa: F401
+
         return
     except ImportError:
         pass
@@ -63,7 +64,9 @@ def _reexec_under_venv() -> None:
 
         common = subprocess.run(
             ["git", "-C", str(ROOT), "rev-parse", "--path-format=absolute", "--git-common-dir"],
-            capture_output=True, text=True, check=True,
+            capture_output=True,
+            text=True,
+            check=True,
         ).stdout.strip()
         if common:
             primary = Path(common).parent
@@ -97,7 +100,9 @@ def load(contracts: Path):
         from referencing import Registry, Resource
     except ImportError:
         print("FAIL: jsonschema is not installed, so the disclosure matrix was NOT checked.")
-        print("      uv pip install --python .venv/bin/python pyyaml jsonschema openapi-spec-validator")
+        print(
+            "      uv pip install --python .venv/bin/python pyyaml jsonschema openapi-spec-validator"
+        )
         raise SystemExit(1) from None
 
     schemas = {}
@@ -148,8 +153,12 @@ def sweep_transcript(contracts, schemas, registry, V) -> None:
         fail(f"{name}: no valid-converged.json to sweep from")
         return
     base = json.loads(base_path.read_text())
-    if not base.get("transcript") or "availability" not in base["transcript"][0].get("disclosed", {}):
-        fail("valid-converged.json: transcript[0].disclosed.availability is required for this sweep")
+    if not base.get("transcript") or "availability" not in base["transcript"][0].get(
+        "disclosed", {}
+    ):
+        fail(
+            "valid-converged.json: transcript[0].disclosed.availability is required for this sweep"
+        )
         return
     v = V(schemas[name], registry=registry)
     for entry, inner in itertools.product(LEVELS, repeat=2):
@@ -179,8 +188,10 @@ def check_every_carrier_is_registered(schemas) -> None:
     checks += 1
     known = {
         ("agent-protocol.schema.json", "properties/payload/properties/availability"),
-        ("negotiation-state.schema.json",
-         "properties/transcript/items/properties/disclosed/properties/availability"),
+        (
+            "negotiation-state.schema.json",
+            "properties/transcript/items/properties/disclosed/properties/availability",
+        ),
     }
     found = set()
 
@@ -262,7 +273,9 @@ def check_named_regressions(contracts, schemas, registry, V) -> None:
     done["viewer"]["state"] = "accepted"
     done["participants"][0]["state"] = "accepted"
     done["pending_approvals"] = []
-    errs = [f"{'/'.join(str(x) for x in e.path) or '(root)'}: {e.message}" for e in v.iter_errors(done)]
+    errs = [
+        f"{'/'.join(str(x) for x in e.path) or '(root)'}: {e.message}" for e in v.iter_errors(done)
+    ]
     if errs:
         fail(
             "a viewer who has already approved, while peers are still deciding, must be "

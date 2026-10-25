@@ -23,11 +23,15 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install PyYAML (for OpenAPI validation)
-        run: pip install pyyaml
+      - name: Install contract validation dependencies
+        # All three are required once contracts/ is populated. The validator treats a
+        # missing dependency as a hard FAIL rather than a silent skip, so installing
+        # only PyYAML -- as this step did before T1 landed real schemas -- fails the
+        # job while reporting that nothing was checked.
+        run: pip install pyyaml jsonschema openapi-spec-validator
 
       - name: Validate agent protocol and API contracts
-        run: ./scripts/ci/validate_contracts.py
+        run: ./scripts/ci/validate_contracts.py --strict
 
       - name: Shell syntax check
         run: |
