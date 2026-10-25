@@ -48,8 +48,14 @@ class RosterDiscord(DiscordREST):
     async def audience(self, channel: str, guild: str) -> Audience:
         try:
             server, room, identity = await self.context(channel, guild)
-            visible = set()
+            # context() already fetched the bot's member document and proved it can view
+            # the room, so re-fetching it here buys nothing and costs a third of the
+            # `guilds/{id}/members/{user}` budget -- a bucket of five per second that two
+            # demo commands in quick succession will exhaust.
+            visible = {identity}
             for uid in self.roster:
+                if uid == identity:
+                    continue
                 member = await self.document(f"guilds/{guild}/members/{uid}")
                 if can_view(member, server, room):
                     visible.add(member["user"]["id"])

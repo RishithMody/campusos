@@ -141,19 +141,27 @@ def test_unsupported_channels_fail_closed(name, kwargs):
     assert caught.value.status == 403, name
 
 
-@pytest.mark.parametrize("status", [401, 403, 404, 429, 500, 503])
-def test_a_non_200_from_discord_is_never_treated_as_success(status):
+@pytest.mark.parametrize(
+    "status,expected",
+    [(401, 403), (403, 403), (404, 403), (429, 503), (500, 503), (503, 503)],
+)
+def test_a_non_200_from_discord_is_never_treated_as_success(status, expected):
     """The bodies served here are *valid*; only the status code is wrong.
 
     Written this way on purpose. An earlier version returned an error body as well, so
     the request failed the next check anyway and the test passed even with the status
     check removed -- it proved nothing. Now the status check is the only thing that can
     refuse, so deleting it fails this test.
+
+    Every one of them fails closed; the two kinds are not the same kind. A 401/403/404 is
+    Discord answering about authority. A 429 or a 5xx is Discord declining to answer at
+    all, and reporting that as an authorization refusal sent a real diagnosis at a real
+    demo after the wrong system entirely.
     """
     people = [member(BOT), member("1")]
     with pytest.raises(Problem) as caught:
         run(client(world(people, status=status)).audience(CHANNEL, GUILD))
-    assert caught.value.status == 403
+    assert caught.value.status == expected
 
 
 def test_a_bot_that_is_a_member_but_cannot_view_the_channel_is_refused():

@@ -143,9 +143,18 @@ def main() -> None:
         api = API(os.environ["CAMPUSOS_API_URL"], os.environ["CAMPUSOS_BOT_TOKEN"])
         bot = Bot(api, int(os.environ["DISCORD_GUILD_ID"]))
         bot.run(os.environ["DISCORD_BOT_TOKEN"], log_handler=None)
-    except (KeyError, ValueError, discord.DiscordException):
+    except KeyError as missing:
+        # A variable NAME, never its value.
+        raise SystemExit(f"Bot startup failed: {missing.args[0]} is not set.") from None
+    except (ValueError, discord.DiscordException) as failure:
+        # The exception's class name, and nothing else. A Discord exception's message and
+        # traceback can embed response content, so neither is reported -- but a bare
+        # "startup failed" leaves an operator with nothing at all, which is how this bot
+        # exited mid-session on 2026-10-25 with no way to tell a dropped gateway from a
+        # bad credential. A class name carries no response content.
         raise SystemExit(
-            "Bot startup failed. Check environment and Discord configuration."
+            f"Bot startup failed ({type(failure).__name__}). "
+            "Check environment and Discord configuration."
         ) from None
 
 

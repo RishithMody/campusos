@@ -160,6 +160,8 @@ Then `$A stage` again to continue — a withdrawn binding is final.
 | `/watch` does nothing | Run `$A watch` in the terminal. It is the same `Publisher` loop `/watch` runs, and it posts to the same channel |
 | Slash commands missing in Discord | The bot process died. Restart it (cold start step 5). Commands re-sync on startup |
 | Everything returns 403 | The bot credential expired. Re-mint it (cold start step 4) and restart the bot |
+| `503` / "Channel verification unavailable" | Discord throttled us -- `guilds/{id}/members/{user}` allows five a second. Wait two seconds and repeat. It is not a consent problem, and since 2026-10-25 it no longer pretends to be one |
+| The bot vanished mid-demo | It exits on a dropped gateway and prints one line. `$A check` catches it; restart with cold-start steps 4 and 5. Space the demo commands a second apart |
 | `check` says the backend is down | Restart it (cold start step 3); `tail /tmp/campusos-api.log` |
 | The bot posts nothing and `say` shows 403 | Someone is out of consent. `$A restored` then `$A reconsent` |
 | Confused state, under a minute left | `$A stage` — it builds a clean consented negotiation from scratch |

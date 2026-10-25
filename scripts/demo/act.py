@@ -172,6 +172,42 @@ def cmd_check(_args):
         ", ".join(f"/{n}" for n in names),
     )
 
+    print(f"\n{BOLD}Credentials{OFF}")
+    line(
+        bool(env.get("DISCORD_BOT_TOKEN"))
+        and env.get("CAMPUSOS_DISCORD_TOKEN") == env.get("DISCORD_BOT_TOKEN"),
+        "backend's Discord token matches the bot's",
+        "it verifies the channel audience with this; a placeholder fails every binding closed",
+    )
+    # The .env credential, not one minted here. An expired CAMPUSOS_BOT_TOKEN is refused
+    # with the same uniform 403 as "nobody consented" -- correct, and indistinguishable
+    # on stage. The one in .env had silently expired before a rehearsal.
+    try:
+        claims = jwt.decode(
+            env.get("CAMPUSOS_BOT_TOKEN", ""),
+            KEY,
+            algorithms=["HS256"],
+            issuer="campusos",
+            audience="campusos-api",
+        )
+        hours = (claims["exp"] - now().timestamp()) / 3600
+        line(
+            claims.get("kind") == "bot" and claims.get("guild") == GUILD,
+            "CAMPUSOS_BOT_TOKEN in .env",
+            f"kind={claims.get('kind')}, guild matches, {hours:.1f}h left",
+        )
+        if hours < 2:
+            print(f"  {YELLOW}NOTE{OFF} under two hours left. Re-mint and restart the bot:")
+            print(
+                "          export CAMPUSOS_BOT_TOKEN=$(backend/.venv/bin/python -m "
+                "backend.manage \\\n            issue-bot campusos-bot --guild "
+                '"$DISCORD_GUILD_ID" --ttl 24 | head -1)'
+            )
+    except jwt.ExpiredSignatureError:
+        line(False, "CAMPUSOS_BOT_TOKEN in .env", "EXPIRED -- re-mint it and restart the bot")
+    except (jwt.InvalidTokenError, KeyError, TypeError) as e:
+        line(False, "CAMPUSOS_BOT_TOKEN in .env", f"{type(e).__name__} -- re-mint it")
+
     print(f"\n{BOLD}Room{OFF}")
     ids = [u for u in ROSTER_FILE.read_text().split() if u] if ROSTER_FILE.exists() else []
     line(bool(ids), f"{ROSTER_FILE.name}", f"{len(ids)} account(s) can read the channel")
@@ -190,22 +226,25 @@ def cmd_check(_args):
                 "channel binding",
                 f"status={b['status'] if b else 'missing'}",
             )
-            summary = call(
-                "GET",
-                f"/negotiations/{s['negotiation']}/channel-summary?channel_id={s['channel']}",
-                "campusos-bot",
-                "bot",
-                guild=GUILD,
+            # Deliberately the .env credential: that is the one the bot presents, and a
+            # locally minted stand-in would hide exactly the failure that bit us.
+            summary = httpx.get(
+                BASE + f"/negotiations/{s['negotiation']}/channel-summary"
+                f"?channel_id={s['channel']}",
+                headers={"Authorization": "Bearer " + env.get("CAMPUSOS_BOT_TOKEN", "")},
+                timeout=30,
             )
+            note = ""
+            if summary.status_code == 200:
+                note = f"  template={summary.json()['template_id']}"
+            elif summary.status_code == 503:
+                note = (
+                    "  Discord throttled us -- wait two seconds and re-run; not a consent problem"
+                )
             line(
                 summary.status_code == 200,
                 "bot may read the summary",
-                f"HTTP {summary.status_code}"
-                + (
-                    f"  template={summary.json()['template_id']}"
-                    if summary.status_code == 200
-                    else ""
-                ),
+                f"HTTP {summary.status_code}{note}",
             )
         except SystemExit:
             raise

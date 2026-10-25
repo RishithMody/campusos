@@ -106,6 +106,15 @@ class DiscordREST:
             ) as client:
                 response = await client.get(path, timeout=5)
                 if response.status_code != 200:
+                    # A throttle or an outage is not an authorization decision. Both fail
+                    # closed, but collapsing them into one refusal makes a rate limit
+                    # indistinguishable from "consent refused" -- which is exactly what
+                    # happened on 2026-10-25 while rehearsing a demo. Each audience check
+                    # costs three `guilds/{id}/members/{user}` fetches against a bucket of
+                    # five per second, and the resulting 429 surfaced as the uniform
+                    # consent 403, pointing every diagnosis at the wrong system.
+                    if response.status_code == 429 or response.status_code >= 500:
+                        raise Problem(503, "Channel verification unavailable")
                     raise Problem(403)
                 return response.json()
         except (httpx.HTTPError, ValueError):
