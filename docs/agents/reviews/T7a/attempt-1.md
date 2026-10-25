@@ -2,116 +2,114 @@
 
 | | |
 |---|---|
-| **Task ID** | `T7a` |
+| **Task ID** | `T7a` — Live verification: real PostgreSQL, Redis (Discord still pending) |
 | **Branch** | `task/T7a-live-verify` |
-| **Reviewer CLI** | `codex` |
-| **Date (UTC)** | `2026-10-25T01:07:01Z` |
-| **Attempt** | `1` / 3 |
-| **Verdict** | <!-- PASS | CHANGES_REQUESTED | BLOCKED | ESCALATE --> |
+| **Reviewed HEAD** | `f33504e` |
+| **Reviewer** | Claude Code (Orchestrator session) |
+| **Date (UTC)** | 2026-10-24 |
+| **Verdict** | **PASS** — Docker startup unverified, live Discord not attempted |
 
-> Review the **diff**, not the author's description of it. You did not write this code and
-> share no memory with the agent that did — that independence is the point.
->
-> This is attempt `1` of 3. After the third, the loop stops and escalates to the human.
-> There is no infinite autonomous repair loop.
+## On independence
 
-```
-git diff main...HEAD
-git log --oneline main..HEAD
-```
+Codex implemented T7a; this review is Claude Code, satisfying CLAUDE.md §6. Same two caveats
+as the T2 and T9 reviews: the reviewer wrote the contracts under test, and §9 forbids child
+agents so this ran in the Orchestrator session. Every number below was re-derived by running
+the suites on services this reviewer started.
 
----
+## The three reported counts, re-run
 
-## 1. Correctness and acceptance criteria
+Against a PostgreSQL 17 cluster and Redis 8.10.2 started for this review:
 
-<!-- Go through docs/task-graph.md for this task, criterion by criterion.
-     Verified = you ran something or read the code that implements it. -->
-
-| Acceptance criterion | Met? | Evidence |
+| Suite | Reported | Observed |
 |---|---|---|
-| | | |
+| `tests/backend/` | 88 | **88 passed** |
+| `tests/groupchat/` | 32 | **32 passed** |
+| `tests/live/` | 7 | **7 passed** |
 
-## 2. Security and privacy
+The 7 needs `CAMPUSOS_LIVE_DESTRUCTIVE=1` and `CAMPUSOS_LIVE_NATIVE=1` in addition to the
+three variables the handoff's command block shows. With only the documented three it is
+**5 passed, 2 skipped**, with the skip reason printed. The claim is true; the quoted command
+does not reproduce it. See F1.
 
-CampusOS exists to protect private student information. **Try to break the guarantees** — do not
-just read for style.
+Notably, 88 includes `test_actual_stream_closes_on_grant_revocation`, which failed against
+real Redis before this task. `LoopSafeRedis` fixes it honestly — a fresh connection per call,
+scoped to the calling loop — rather than by reaching for a mock.
 
-| Check | Result | Notes |
-|---|---|---|
-| Student A's agent cannot read B's data (direct call) | | |
-| No IDOR on path/query params | | |
-| Identity derived from token, never a client-supplied ID | | |
-| Negotiation messages respect the disclosure level | | |
-| Revoked / expired grants are actually rejected | | |
-| No secrets in code, config, logs, or error messages | | |
-| No private schedule detail in logs or stack traces | | |
-| Inference endpoint not publicly exposed, auth in front | | |
+## Does it actually use real services, or silently fall back?
 
-## 3. API contract compatibility
+This was the question worth answering, so it got experiments rather than a reading.
 
-<!-- Does the change still satisfy contracts/? Is any published schema modified (not allowed
-     outside T1 without Orchestrator approval)? Would this break the frontend or another agent
-     already building against it? -->
+| Experiment | Result |
+|---|---|
+| `CAMPUSOS_LIVE=1`, URLs unset | **`INTERNALERROR … Live opt-in requires both …`, no tests ran** |
+| `CAMPUSOS_LIVE=1`, URLs set, **services down** | **1 failed, 39 errors** — no fallback |
+| Live run vs mock run | **127 passed / 0 skipped** vs **119 passed / 8 skipped** |
+| PostgreSQL during a run | a `t7a_*` database observed present 17 times, created and dropped per test |
+| PostgreSQL after a run | **0** leftover databases |
+| Redis during a run | **817 commands processed** |
 
-## 4. Test coverage
+**A mock run cannot reach 127 passed**, and the skip count is the tell. Combined with the
+`pytest.fail` on missing URLs and the loopback-only guard in `service_urls()`, there is no
+path by which a mock run is mistaken for a live one.
 
-<!-- Do the task's required tests exist and actually assert the thing they claim?
-     A test that passes against a broken implementation is worse than no test.
-     Name the untested paths — especially error and partial-failure paths. -->
+One thing to keep in mind rather than fix: with services **down**, 48 tests still pass —
+those are the ones that never touch a service. "Some passes" is not "live verified"; the
+number to look for is 127 with no skips.
 
-| Required test (from task graph) | Exists | Passes | Actually asserts it |
-|---|---|---|---|
-| | | | |
+## Harness, fixtures, resilience, Compose
 
-**Tests run by me, with real output:**
+**Harness.** `pytest_collection_modifyitems` swaps the `env` fixture only when
+`CAMPUSOS_LIVE=1`, leaving both owning suites untouched — the right call, since
+`tests/backend/` and `tests/groupchat/` are not T7a's files. `isolated_database()` creates a
+randomly named database per engine and drops it in a finalizer, which is what in-memory
+SQLite gives and what a shared database would not.
 
-```
-<!-- paste the actual command and actual output; never a pass you did not observe -->
-```
+**Resilience tests are real.** A backend PID is terminated mid-transaction and the commit is
+asserted to raise; PostgreSQL is genuinely stopped and restarted and the negotiation survives
+byte-identical; Redis is shut down under a live SSE stream and the stream terminates then
+reconnects. The pub/sub test uses an ordinary pool on one loop "as production does",
+asserting the published value, the session key, the TTL bounds and actual expiry after 1.1s.
 
-## 5. Regressions
+**`test_human_consent_boundary_is_the_trusted_issuer_claim` documents the gap instead of
+hiding it.** An agent token gets 403; a human-kind token from the trusted issuer gets 200
+*with no human ceremony anywhere*, and the test says so in a comment. That is the right way
+to handle a known limitation — pinned as an executable fact rather than described in prose
+nobody re-reads. It was carried from the T2 review and has now been closed as far as it can
+be without a real issuer.
 
-<!-- Full suite, not just the new tests. A fix that breaks another task is not a fix. -->
+**Compose.** `docker compose config --quiet` exits 0 without a daemon. Both services bind
+`127.0.0.1` only, have healthchecks, declare **no volumes** so nothing persists on the host,
+and expose exactly the ports the tests expect. `docker info` fails with
+`dial unix /var/run/docker.sock: connect: no such file or directory` — the daemon is
+genuinely unavailable, as the handoff states.
 
-```
-<!-- paste real output -->
-```
+## Boundaries
 
-## 6. Unnecessary complexity
-
-<!-- Abstractions with one caller, speculative generality, duplicated logic, a dependency
-     that earns nothing. Flag it, but do not block a PASS on taste alone — separate
-     "must fix" from "would be nicer". -->
-
----
+No production code, no frozen contract, no protected file. The diff is `tests/live/`,
+`docker-compose.yml` and the handoff — exactly T7a's ownership. `ruff check` and
+`ruff format --check` clean on `tests/live/`. Repo contract validation, disclosure matrix,
+tooling suite and secret scan all pass from this branch.
 
 ## Findings
 
-Severity: `critical` (data leak, auth bypass, data loss) · `major` (acceptance criterion
-unmet, broken contract) · `minor` (quality, naming, clarity) · `nit` (optional)
+| # | Severity | Finding |
+|---|---|---|
+| F1 | minor | The handoff's command block shows three environment variables, but the 7-pass result needs `CAMPUSOS_LIVE_DESTRUCTIVE=1` and `CAMPUSOS_LIVE_NATIVE=1` as well. Someone reproducing it from the handoff gets 5 passed / 2 skipped and reasonably concludes the claim was inflated. It was not — the variables are documented in `tests/live/README.md`, just not in the block that looks copy-pasteable. Add them there |
+| N1 | nit | The destructive tests hardcode `/private/tmp/campusos-t7a-pg` and ports 55439/56389. Correct for a disposable local cluster and asserted loopback-only, but it means the data directory is a second, undocumented precondition |
 
-| # | Severity | File:line | Finding | Required fix |
-|---|---|---|---|---|
-| 1 | | | | |
+Neither blocks the merge.
+
+## What this PASS does **not** cover
+
+- **Docker container startup is unverified.** Config validates; nothing was ever started. The
+  native services prove the code works against real PostgreSQL and Redis — they do not prove
+  the Compose file brings those services up.
+- **Live Discord was not attempted and is not claimed.** `FakeDiscord` is still in the
+  fixture. No account, server, channel, gateway connection, intent or permission bit has been
+  exercised against real Discord. That remains entirely open.
 
 ## Verdict
 
-**Verdict:** <!-- PASS | CHANGES_REQUESTED | BLOCKED | ESCALATE -->
-
-- `PASS` — criteria met, tests pass, nothing above `minor`. **Recommend human merge.**
-  (You never merge. Human approval is required.)
-- `CHANGES_REQUESTED` — findings above. Returns to the implementing agent for attempt `1`+1.
-  Every finding must be specific enough to fix without guessing.
-- `BLOCKED` — cannot review. State exactly what is missing.
-- `ESCALATE` — three attempts exhausted. Write `ESCALATION.md` and stop.
-
-**Rationale:**
-
-**If CHANGES_REQUESTED — hand back with:**
-```
-./scripts/agents.sh start <role> T7a
-```
-Point the agent at this file. It fixes, re-runs tests, re-commits, and then:
-```
-./scripts/agents.sh review T7a
-```
+**PASS.** Counts verified, fallback ruled out experimentally, boundaries clean, nothing above
+a minor. **Recommend merge**, with Docker startup and live Discord carried forward explicitly.
+The reviewer does not merge.
